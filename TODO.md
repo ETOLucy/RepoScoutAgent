@@ -69,22 +69,27 @@
 
 ### 2.1 评测基线
 
-- [ ] 标注第一批 15 条自然语言需求、相关仓库和关键证据片段
-- [ ] 固定 GitHub Search、Tree、Contents 和 README/docs 响应
-- [ ] 实现完全离线的端到端回放
-- [ ] 记录当前全文输入的 Precision@5、Evidence Recall、Citation Accuracy
-- [ ] 记录单任务延迟、Token、GitHub 调用数和估算成本
-- [ ] 保存至少 5 个当前失败案例，后续技术必须针对这些案例验证
+- [x] 标注第一批 15 条自然语言需求、相关仓库和关键证据片段
+- [x] 固定 GitHub Search、Tree、Contents 和 README/docs 响应
+- [x] 实现完全离线的端到端回放
+- [x] 记录当前全文输入的 Precision@5、Evidence Recall、Citation Accuracy
+- [x] 记录单任务延迟、Token 估算、GitHub/模型调用数和成本配置状态
+- [x] 支持按版本化模型输入/输出单价计算估算成本
+- [x] 保存至少 5 个当前失败案例，后续技术必须针对这些案例验证
+
+基线产物位于 `evals/baseline_cases.json` 和 `evals/baseline_report.json`。当前全文输入基线：Precision@5（micro）为 0.4828、Evidence Recall 为 0.80、Citation Accuracy 为 1.00；15 条任务共 44 次模型调用、45 次 GitHub 工具调用，估算输入 6476 tokens、输出 2229 tokens。延迟是离线 mock 环境数据，只用于代码回归，不代表线上网络延迟。
 
 ### 2.2 FastAPI 与异步工具层
 
-- [ ] 用 FastAPI 和 Pydantic 请求/响应模型替换 `http.server`
-- [ ] GitHub 工具改用共享 `httpx.AsyncClient`
-- [ ] 使用 semaphore 控制并发和 GitHub 二级限流
-- [ ] 实现超时、指数退避、有限重试和请求取消
-- [ ] 单仓库失败不影响其他候选，返回部分成功结果
-- [ ] 使用 SSE 展示解析、搜索、抓取、分析和汇总进度
-- [ ] 为后续 LangGraph `Send` 保持工具函数可独立测试
+- [x] 用 FastAPI 和 Pydantic 请求/响应模型替换 `http.server`
+- [x] GitHub 工具改用共享 `httpx.AsyncClient`
+- [x] 使用 semaphore 控制并发和 GitHub 二级限流
+- [x] 实现超时、指数退避、有限重试和请求取消
+- [x] 单仓库失败不影响其他候选，返回部分成功结果
+- [x] 使用 SSE 展示解析、搜索、抓取、分析和汇总进度
+- [x] 为后续 LangGraph `Send` 保持工具函数可独立测试
+
+当前 API 同时提供 `POST /api/search` JSON 响应和 `POST /api/search/stream` SSE 进度流。FastAPI lifespan 管理共享 GitHub 客户端；所有请求共用并发限制，连接错误、超时和 5xx 最多重试三次，403/429 不做无意义重试。客户端断开会取消 Graph 和下游异步任务。
 
 ### 2.3 文档采集与切块
 

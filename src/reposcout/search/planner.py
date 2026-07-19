@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from .models import SearchIntent
 
@@ -16,8 +16,10 @@ SEARCH_INTENT_PROMPT = (
 )
 
 
-def parse_search_intent_with_llm(raw: str, client: OpenAI, model: str) -> SearchIntent:
-    response: Any = client.responses.parse(
+async def parse_search_intent_with_llm(
+    raw: str, client: AsyncOpenAI, model: str
+) -> SearchIntent:
+    response: Any = await client.responses.parse(
         model=model,
         input=[
             {"role": "system", "content": SEARCH_INTENT_PROMPT},

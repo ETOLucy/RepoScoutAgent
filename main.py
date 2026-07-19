@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
-from http import HTTPStatus
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
+import uvicorn
 from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from src.reposcout import build_graph
+from src.reposcout.github_client import GitHubClient, set_github_client
 
 load_dotenv()
 
@@ -19,61 +25,92 @@ STATIC_DIR = ROOT / "static"
 GRAPH = build_graph()
 
 
-class Handler(SimpleHTTPRequestHandler):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
+class SearchRequest(BaseModel):
+    requirement: str = Field(min_length=1, max_length=4000)
 
-    def send_json(self, data: Any, status: int = HTTPStatus.OK) -> None:
-        payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(payload)))
-        self.end_headers()
-        self.wfile.write(payload)
 
-    def read_json(self) -> dict[str, Any]:
-        length = int(self.headers.get("Content-Length", "0"))
-        return json.loads(self.rfile.read(length) or b"{}")
+class SearchResponse(BaseModel):
+    requirement: dict[str, Any] = Field(default_factory=dict)
+    query: str = ""
+    report: str = ""
+    recommendations: list[dict[str, Any]] = Field(default_factory=list)
+    rejected_candidates: list[dict[str, Any]] = Field(default_factory=list)
+    requirement_parser: str = ""
+    search_intent: dict[str, Any] = Field(default_factory=dict)
+    clarification_questions: list[str] = Field(default_factory=list)
+    search_plan: dict[str, Any] = Field(default_factory=dict)
+    queries: list[dict[str, Any]] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    rate_limit: dict[str, Any] = Field(default_factory=dict)
+    error: str = ""
 
-    def do_GET(self) -> None:
-        if urlparse(self.path).path == "/api/health":
-            self.send_json({"status": "ok", "graph": "reposcout-agent-mvp"})
-            return
-        super().do_GET()
 
-    def do_POST(self) -> None:
-        if urlparse(self.path).path != "/api/search":
-            self.send_json({"error": "接口不存在"}, HTTPStatus.NOT_FOUND)
-            return
+def _response_payload(result: dict[str, Any]) -> dict[str, Any]:
+    return SearchResponse.model_validate(result).model_dump()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    client = GitHubClient(
+        max_concurrency=int(os.getenv("GITHUB_MAX_CONCURRENCY", "4")),
+        max_attempts=int(os.getenv("GITHUB_MAX_ATTEMPTS", "3")),
+    )
+    set_github_client(client)
+    try:
+        yield
+    finally:
+        set_github_client(None)
+        await client.close()
+
+
+app = FastAPI(title="RepoScoutAgent", version="0.2.0", lifespan=lifespan)
+
+
+@app.get("/api/health")
+async def health() -> dict[str, str]:
+    return {"status": "ok", "graph": "reposcout-agent-mvp"}
+
+
+@app.post("/api/search")
+async def search(request: SearchRequest) -> JSONResponse:
+    result = await GRAPH.ainvoke({"raw_requirement": request.requirement.strip()})
+    payload = _response_payload(result)
+    status = 400 if result.get("error") and not result.get("query") else 200
+    return JSONResponse(content=payload, status_code=status)
+
+
+def _sse(event: str, data: dict[str, Any]) -> str:
+    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    return f"event: {event}\ndata: {payload}\n\n"
+
+
+@app.post("/api/search/stream")
+async def search_stream(request: SearchRequest) -> StreamingResponse:
+    async def events() -> AsyncIterator[str]:
+        state: dict[str, Any] = {"raw_requirement": request.requirement.strip()}
         try:
-            requirement = str(self.read_json().get("requirement", "")).strip()
-            result = GRAPH.invoke({"raw_requirement": requirement})
-            self.send_json(
-                {
-                    "requirement": result.get("requirement", {}),
-                    "query": result.get("query", ""),
-                    "report": result.get("report", ""),
-                    "recommendations": result.get("recommendations", []),
-                    "rejected_candidates": result.get("rejected_candidates", []),
-                    "requirement_parser": result.get("requirement_parser", ""),
-                    "search_intent": result.get("search_intent", {}),
-                    "clarification_questions": result.get("clarification_questions", []),
-                    "search_plan": result.get("search_plan", {}),
-                    "queries": result.get("queries", []),
-                    "warnings": result.get("warnings", []),
-                    "rate_limit": result.get("rate_limit", {}),
-                    "error": result.get("error", ""),
-                },
-                HTTPStatus.BAD_REQUEST
-                if result.get("error") and not result.get("query")
-                else HTTPStatus.OK,
-            )
-        except (ValueError, json.JSONDecodeError):
-            self.send_json({"error": "请求格式无效"}, HTTPStatus.BAD_REQUEST)
+            async for update in GRAPH.astream(state, stream_mode="updates"):
+                for node, values in update.items():
+                    if isinstance(values, dict):
+                        state.update(values)
+                    yield _sse("progress", {"node": node})
+            yield _sse("result", _response_payload(state))
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            yield _sse("error", {"error": f"任务执行失败：{type(exc).__name__}"})
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
 
 
 if __name__ == "__main__":
     host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "8000"))
-    print(f"RepoScoutAgent 已启动：http://{host}:{port}")
-    ThreadingHTTPServer((host, port), Handler).serve_forever()
+    uvicorn.run(app, host=host, port=port, reload=False)

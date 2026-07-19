@@ -45,6 +45,13 @@
   const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const list=(items,render=item=>esc(item))=>items?.length?`<ul class="intent-list">${items.map(item=>`<li>${render(item)}</li>`).join("")}</ul>`:"";
   const row=(label,value,wide=false)=>value?`<div class="intent-row${wide?" intent-wide":""}"><div class="intent-label">${esc(label)}</div><div class="intent-value">${value}</div></div>`:"";
+  const progressLabel={validate_request:"正在校验需求",understand_requirement:"正在生成搜索关键词",plan_search:"正在编译 GitHub 查询",search_github:"正在搜索候选仓库",inspect_documents:"正在读取 README 和 docs",match_documents:"正在匹配文档证据",generate_report:"正在生成结果"};
+  const streamSearch=async requirement=>{
+    const response=await fetch("/api/search/stream",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requirement})});
+    if(!response.ok||!response.body)throw new Error("stream unavailable");
+    const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="",result=null;
+    while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value||new Uint8Array(),{stream:!done});const frames=buffer.split("\n\n");buffer=frames.pop()||"";for(const frame of frames){let event="message",payload="";for(const line of frame.split("\n")){if(line.startsWith("event: "))event=line.slice(7);if(line.startsWith("data: "))payload+=line.slice(6)}if(!payload)continue;const data=JSON.parse(payload);if(event==="progress")document.getElementById("summary").textContent=progressLabel[data.node]||"Agent 正在执行";if(event==="result")result=data;if(event==="error")throw new Error(data.error||"search failed")}if(done)break}if(!result)throw new Error("missing result");return result;
+  };
   const renderIntent=data=>{
     const el=document.getElementById("intent"),value=data.search_intent||{},parser=data.requirement_parser==="llm"?"LLM 理解":data.requirement_parser==="rules_fallback"?"规则降级":"规则理解";
     if(!Object.keys(value).length){el.style.display="none";el.innerHTML="";return}
@@ -56,8 +63,7 @@
     e.preventDefault();const requirement=document.getElementById("requirement").value.trim(),btn=document.getElementById("submit"),summary=document.getElementById("summary"),results=document.getElementById("results"),intent=document.getElementById("intent");
     btn.disabled=true;btn.textContent="Graph 执行中";summary.style.display="block";summary.textContent="正在解析需求并检索 GitHub…";results.innerHTML="";intent.style.display="none";intent.innerHTML="";
     try{
-      const response=await fetch("/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requirement})});
-      const data=await response.json(),parser=data.requirement_parser==="llm"?"LLM":"规则";
+      const data=await streamSearch(requirement),parser=data.requirement_parser==="llm"?"LLM":"规则";
       summary.innerHTML=`${esc(data.report)}${data.query?`<br><span class="query">${esc(data.query)}</span>`:""}<div class="filter-note">需求解析：${esc(parser)}${data.rejected_candidates?.length?` · 已排除 ${data.rejected_candidates.length} 个违反硬条件的候选`:""}</div>${data.warnings?.length?`<div class="warning">${data.warnings.map(esc).join(" · ")}</div>`:""}`;
       renderIntent(data);
       if(!data.recommendations?.length){results.innerHTML=`<div class="empty">${esc(data.error||"没有可展示的结果")}</div>`;return}

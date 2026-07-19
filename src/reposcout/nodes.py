@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import math
 import os
 import re
@@ -7,13 +8,11 @@ from contextlib import suppress
 from typing import Any
 
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from .github_client import (
     GitHubSearchError,
-    fetch_repository_documents,
-    get_rate_limit,
-    search_repositories,
+    get_github_client,
 )
 from .search import (
     RepositoryAssessment,
@@ -58,8 +57,8 @@ ASSESSMENT_PROMPT = (
 )
 
 
-def _openai_client() -> OpenAI:
-    return OpenAI()
+def _openai_client() -> AsyncOpenAI:
+    return AsyncOpenAI()
 
 
 def validate_request(state: RepoScoutState) -> dict[str, Any]:
@@ -86,13 +85,13 @@ def _explicit_constraints(raw: str) -> dict[str, Any]:
     }
 
 
-def understand_requirement(state: RepoScoutState) -> dict[str, Any]:
+async def understand_requirement(state: RepoScoutState) -> dict[str, Any]:
     raw = state["raw_requirement"].strip()
     warnings = list(state.get("warnings", []))
     parser = "rules"
     if os.getenv("OPENAI_API_KEY"):
         try:
-            intent = parse_search_intent_with_llm(
+            intent = await parse_search_intent_with_llm(
                 raw, _openai_client(), os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
             )
             parser = "llm"
@@ -135,15 +134,15 @@ def plan_search(state: RepoScoutState) -> dict[str, Any]:
     }
 
 
-def search_github(state: RepoScoutState) -> dict[str, Any]:
+async def search_github(state: RepoScoutState) -> dict[str, Any]:
     query = str(state["queries"][0]["query"])
     warnings = list(state.get("warnings", []))
     try:
-        candidates = search_repositories(query, limit=20)
+        candidates = await get_github_client().search_repositories(query, limit=20)
         if not candidates:
             relaxed = relax_github_query(query)
             if relaxed:
-                candidates = search_repositories(relaxed, limit=20)
+                candidates = await get_github_client().search_repositories(relaxed, limit=20)
                 warnings.append(f"原查询无结果，已自动放宽：{query} -> {relaxed}")
                 query = relaxed
     except GitHubSearchError as exc:
@@ -173,18 +172,29 @@ def search_github(state: RepoScoutState) -> dict[str, Any]:
     }
 
 
-def inspect_documents(state: RepoScoutState) -> dict[str, Any]:
-    inspected: list[dict[str, Any]] = []
+async def inspect_documents(state: RepoScoutState) -> dict[str, Any]:
     rejected = list(state.get("rejected_candidates", []))
     warnings = list(state.get("warnings", []))
-    for candidate in state.get("candidates", [])[:8]:
+    candidates = state.get("candidates", [])[:8]
+
+    async def inspect(candidate: dict[str, Any]) -> tuple[dict[str, Any], Any]:
         try:
-            documents = fetch_repository_documents(
+            documents = await get_github_client().fetch_repository_documents(
                 candidate["full_name"], candidate["default_branch"], max_documents=6
             )
         except GitHubSearchError as exc:
-            warnings.append(f"{candidate['full_name']}：文档读取失败：{exc}")
-            documents = []
+            return candidate, exc
+        return candidate, documents
+
+    inspected: list[dict[str, Any]] = []
+    for candidate, outcome in await asyncio.gather(*(inspect(item) for item in candidates)):
+        if isinstance(outcome, GitHubSearchError):
+            warnings.append(f"{candidate['full_name']}：文档读取失败：{outcome}")
+            rejected.append(
+                {"full_name": candidate["full_name"], "reasons": ["仓库文档读取失败"]}
+            )
+            continue
+        documents = outcome
         if not documents:
             rejected.append(
                 {
@@ -229,7 +239,7 @@ def _validate_evidence(
     return assessment
 
 
-def match_documents(state: RepoScoutState) -> dict[str, Any]:
+async def match_documents(state: RepoScoutState) -> dict[str, Any]:
     intent = SearchIntent.model_validate(state["search_intent"])
     recommendations: list[dict[str, Any]] = []
     warnings = list(state.get("warnings", []))
@@ -238,7 +248,7 @@ def match_documents(state: RepoScoutState) -> dict[str, Any]:
         documents = candidate["documents"]
         try:
             if client:
-                response: Any = client.responses.parse(
+                response: Any = await client.responses.parse(
                     model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
                     input=[
                         {"role": "system", "content": ASSESSMENT_PROMPT},
@@ -298,7 +308,7 @@ def match_documents(state: RepoScoutState) -> dict[str, Any]:
     return {"recommendations": recommendations, "warnings": warnings}
 
 
-def generate_report(state: RepoScoutState) -> dict[str, Any]:
+async def generate_report(state: RepoScoutState) -> dict[str, Any]:
     if state.get("error"):
         return {"report": state["error"]}
     recommendations = state.get("recommendations", [])
@@ -311,5 +321,5 @@ def generate_report(state: RepoScoutState) -> dict[str, Any]:
         )
     result: dict[str, Any] = {"report": report}
     with suppress(GitHubSearchError):
-        result["rate_limit"] = get_rate_limit()
+        result["rate_limit"] = await get_github_client().get_rate_limit()
     return result

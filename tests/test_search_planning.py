@@ -11,20 +11,19 @@ from src.reposcout.search import (
 from src.reposcout.search.models import RequirementItem
 
 
-class SearchPlanningTest(unittest.TestCase):
-    def test_llm_returns_requirements_and_keywords(self):
+class SearchPlanningTest(unittest.IsolatedAsyncioTestCase):
+    async def test_llm_returns_requirements_and_keywords(self):
         expected = SearchIntent(
             goal="self-host family photos",
             requirements=[RequirementItem(id="face", description="支持人脸识别")],
             keywords=["self-hosted photos", "face recognition"],
         )
-        client = SimpleNamespace(
-            responses=SimpleNamespace(
-                parse=lambda **_kwargs: SimpleNamespace(output_parsed=expected)
-            )
-        )
+        async def parse(**_kwargs):
+            return SimpleNamespace(output_parsed=expected)
 
-        result = parse_search_intent_with_llm("找自托管照片项目", client, "test")
+        client = SimpleNamespace(responses=SimpleNamespace(parse=parse))
+
+        result = await parse_search_intent_with_llm("找自托管照片项目", client, "test")
 
         self.assertEqual(result, expected)
 

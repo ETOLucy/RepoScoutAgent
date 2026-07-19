@@ -1,0 +1,140 @@
+{
+  "version": "baseline-v1",
+  "cases": [
+    {
+      "id": "self_hosted_photos",
+      "query": "找一个可以自托管家庭照片，支持人脸识别和手机自动备份的项目",
+      "intent": {"goal": "self-host family photos", "requirements": [{"id": "face", "description": "支持人脸识别"}, {"id": "mobile", "description": "支持手机自动备份"}], "keywords": ["self-hosted photos", "face recognition", "mobile backup"]},
+      "repositories": [{"full_name": "demo/photo-home", "description": "Private photo server", "stars": 900}, {"full_name": "demo/gallery-css", "description": "CSS gallery", "stars": 3000}],
+      "documents": {"demo/photo-home": {"README.md": "Private photo server with face recognition and automatic mobile backup."}, "demo/gallery-css": {"README.md": "A responsive CSS image gallery component."}},
+      "assessments": {"demo/photo-home": {"summary": "matches", "criteria": [{"requirement_id": "face", "status": "satisfied", "evidence": "face recognition", "source_path": "README.md"}, {"requirement_id": "mobile", "status": "satisfied", "evidence": "automatic mobile backup", "source_path": "README.md"}]}, "demo/gallery-css": {"summary": "not enough evidence", "criteria": []}},
+      "relevant_repositories": ["demo/photo-home"], "expected_evidence": ["demo/photo-home:face", "demo/photo-home:mobile"]
+    },
+    {
+      "id": "python_rag",
+      "query": "寻找 Python RAG 项目，支持混合检索和引用来源",
+      "intent": {"goal": "find a Python RAG project", "requirements": [{"id": "hybrid", "description": "支持混合检索"}, {"id": "citation", "description": "回答包含引用来源"}], "keywords": ["RAG", "hybrid search", "citations"], "language": "Python"},
+      "repositories": [{"full_name": "demo/rag-kit", "description": "RAG toolkit", "stars": 800}, {"full_name": "demo/vector-demo", "description": "Vector demo", "stars": 1600}],
+      "documents": {"demo/rag-kit": {"README.md": "Python RAG toolkit with hybrid search and source citations."}, "demo/vector-demo": {"README.md": "Minimal vector similarity example."}},
+      "assessments": {"demo/rag-kit": {"summary": "matches", "criteria": [{"requirement_id": "hybrid", "status": "satisfied", "evidence": "hybrid search", "source_path": "README.md"}, {"requirement_id": "citation", "status": "satisfied", "evidence": "source citations", "source_path": "README.md"}]}, "demo/vector-demo": {"summary": "partial", "criteria": []}},
+      "relevant_repositories": ["demo/rag-kit"], "expected_evidence": ["demo/rag-kit:hybrid", "demo/rag-kit:citation"]
+    },
+    {
+      "id": "vscode_review",
+      "query": "找 VS Code 扩展，可以逐块接受或拒绝 AI 修改并撤销",
+      "intent": {"goal": "review AI edits in VS Code", "requirements": [{"id": "hunk", "description": "逐块接受或拒绝修改"}, {"id": "undo", "description": "支持撤销已接受修改"}], "keywords": ["VS Code extension", "hunk review", "undo changes"]},
+      "repositories": [{"full_name": "demo/change-review", "description": "Review AI changes", "stars": 500}, {"full_name": "demo/color-theme", "description": "Editor theme", "stars": 5000}],
+      "documents": {"demo/change-review": {"README.md": "Review each hunk, accept or reject changes, and undo accepted edits."}, "demo/color-theme": {"README.md": "A colorful theme for VS Code."}},
+      "assessments": {"demo/change-review": {"summary": "matches", "criteria": [{"requirement_id": "hunk", "status": "satisfied", "evidence": "accept or reject changes", "source_path": "README.md"}, {"requirement_id": "undo", "status": "satisfied", "evidence": "undo accepted edits", "source_path": "README.md"}]}, "demo/color-theme": {"summary": "unrelated", "criteria": []}},
+      "relevant_repositories": ["demo/change-review"], "expected_evidence": ["demo/change-review:hunk", "demo/change-review:undo"]
+    },
+    {
+      "id": "server_monitoring",
+      "query": "轻量自托管服务器监控，支持 Docker 和告警通知",
+      "intent": {"goal": "self-host server monitoring", "requirements": [{"id": "docker", "description": "支持 Docker 部署"}, {"id": "alerts", "description": "支持告警通知"}], "keywords": ["self-hosted monitoring", "Docker", "alerts"]},
+      "repositories": [{"full_name": "demo/tiny-monitor", "description": "Monitoring", "stars": 700}, {"full_name": "demo/chart-lib", "description": "Charts", "stars": 4200}],
+      "documents": {"demo/tiny-monitor": {"README.md": "Deploy with Docker and configure email or webhook alerts."}, "demo/chart-lib": {"README.md": "JavaScript chart components."}},
+      "assessments": {"demo/tiny-monitor": {"summary": "matches", "criteria": [{"requirement_id": "docker", "status": "satisfied", "evidence": "Deploy with Docker", "source_path": "README.md"}, {"requirement_id": "alerts", "status": "satisfied", "evidence": "webhook alerts", "source_path": "README.md"}]}, "demo/chart-lib": {"summary": "unrelated", "criteria": []}},
+      "relevant_repositories": ["demo/tiny-monitor"], "expected_evidence": ["demo/tiny-monitor:docker", "demo/tiny-monitor:alerts"]
+    },
+    {
+      "id": "password_manager",
+      "query": "团队自托管密码管理器，需要审计日志和 SSO",
+      "intent": {"goal": "team password manager", "requirements": [{"id": "audit", "description": "支持审计日志"}, {"id": "sso", "description": "支持 SSO"}], "keywords": ["self-hosted password manager", "audit log", "SSO"]},
+      "repositories": [{"full_name": "demo/team-vault", "description": "Team vault", "stars": 1200}, {"full_name": "demo/password-cli", "description": "Personal CLI", "stars": 3200}],
+      "documents": {"demo/team-vault": {"README.md": "Enterprise team vault with audit log and SSO integration."}, "demo/password-cli": {"README.md": "Local command line password generator."}},
+      "assessments": {"demo/team-vault": {"summary": "matches", "criteria": [{"requirement_id": "audit", "status": "satisfied", "evidence": "audit log", "source_path": "README.md"}, {"requirement_id": "sso", "status": "satisfied", "evidence": "SSO integration", "source_path": "README.md"}]}, "demo/password-cli": {"summary": "unrelated", "criteria": []}},
+      "relevant_repositories": ["demo/team-vault"], "expected_evidence": ["demo/team-vault:audit", "demo/team-vault:sso"]
+    },
+    {
+      "id": "static_site",
+      "query": "找 Rust 静态网站生成器，支持 Markdown 和增量构建",
+      "intent": {"goal": "Rust static site generator", "requirements": [{"id": "markdown", "description": "支持 Markdown"}, {"id": "incremental", "description": "支持增量构建"}], "keywords": ["static site generator", "Markdown", "incremental build"], "language": "Rust"},
+      "repositories": [{"full_name": "demo/rust-site", "description": "Static sites", "stars": 600}, {"full_name": "demo/md-parser", "description": "Parser", "stars": 2400}],
+      "documents": {"demo/rust-site": {"README.md": "A Rust static site generator with Markdown pages."}, "demo/md-parser": {"README.md": "A fast Markdown parser library."}},
+      "assessments": {"demo/rust-site": {"summary": "partial", "criteria": [{"requirement_id": "markdown", "status": "satisfied", "evidence": "Markdown pages", "source_path": "README.md"}, {"requirement_id": "incremental", "status": "unknown"}]}, "demo/md-parser": {"summary": "unrelated", "criteria": []}},
+      "relevant_repositories": ["demo/rust-site"], "expected_evidence": ["demo/rust-site:markdown", "demo/rust-site:incremental"], "known_failure": "required capability absent from documentation"
+    },
+    {
+      "id": "workflow_automation",
+      "query": "自托管工作流自动化工具，需要 webhook 和定时任务",
+      "intent": {"goal": "workflow automation", "requirements": [{"id": "webhook", "description": "支持 webhook"}, {"id": "schedule", "description": "支持定时任务"}], "keywords": ["self-hosted workflow automation", "webhook", "scheduler"]},
+      "repositories": [{"full_name": "demo/flow-runner", "description": "Automation", "stars": 1500}, {"full_name": "demo/cron-parser", "description": "Cron parser", "stars": 2000}],
+      "documents": {"demo/flow-runner": {"README.md": "Trigger workflows through webhooks and scheduled jobs."}, "demo/cron-parser": {"README.md": "Parse cron expressions."}},
+      "assessments": {"demo/flow-runner": {"summary": "matches", "criteria": [{"requirement_id": "webhook", "status": "satisfied", "evidence": "webhooks", "source_path": "README.md"}, {"requirement_id": "schedule", "status": "satisfied", "evidence": "scheduled jobs", "source_path": "README.md"}]}, "demo/cron-parser": {"summary": "unrelated", "criteria": []}},
+      "relevant_repositories": ["demo/flow-runner"], "expected_evidence": ["demo/flow-runner:webhook", "demo/flow-runner:schedule"]
+    },
+    {
+      "id": "database_gui",
+      "query": "跨平台数据库 GUI，需要 PostgreSQL 和 SSH tunnel",
+      "intent": {"goal": "database GUI", "requirements": [{"id": "postgres", "description": "支持 PostgreSQL"}, {"id": "ssh", "description": "支持 SSH tunnel"}], "keywords": ["database GUI", "PostgreSQL", "SSH tunnel"]},
+      "repositories": [{"full_name": "demo/db-desk", "description": "Database GUI", "stars": 2100}, {"full_name": "demo/sql-format", "description": "Formatter", "stars": 6000}],
+      "documents": {"demo/db-desk": {"README.md": "Desktop database GUI for PostgreSQL with SSH tunnel support."}, "demo/sql-format": {"README.md": "Format SQL in the browser."}},
+      "assessments": {"demo/db-desk": {"summary": "matches", "criteria": [{"requirement_id": "postgres", "status": "satisfied", "evidence": "PostgreSQL", "source_path": "README.md"}, {"requirement_id": "ssh", "status": "satisfied", "evidence": "SSH tunnel support", "source_path": "README.md"}]}, "demo/sql-format": {"summary": "unrelated", "criteria": []}},
+      "relevant_repositories": ["demo/db-desk"], "expected_evidence": ["demo/db-desk:postgres", "demo/db-desk:ssh"]
+    },
+    {
+      "id": "local_llm",
+      "query": "本地运行大模型的工具，需要 OpenAI 兼容 API 和 GPU 支持",
+      "intent": {"goal": "run LLM locally", "requirements": [{"id": "api", "description": "提供 OpenAI 兼容 API"}, {"id": "gpu", "description": "支持 GPU"}], "keywords": ["local LLM", "OpenAI compatible API", "GPU"]},
+      "repositories": [{"full_name": "demo/local-infer", "description": "Local inference", "stars": 5400}, {"full_name": "demo/chat-ui", "description": "Chat frontend", "stars": 8000}],
+      "documents": {"demo/local-infer": {}, "demo/chat-ui": {"README.md": "A web chat interface for remote APIs."}},
+      "assessments": {"demo/chat-ui": {"summary": "unrelated", "criteria": []}},
+      "relevant_repositories": ["demo/local-infer"], "expected_evidence": ["demo/local-infer:api", "demo/local-infer:gpu"], "known_failure": "relevant repository has no captured documentation"
+    },
+    {
+      "id": "markdown_notes",
+      "query": "离线优先 Markdown 笔记软件，需要双向链接和全文搜索",
+      "intent": {"goal": "offline Markdown notes", "requirements": [{"id": "backlinks", "description": "支持双向链接"}, {"id": "search", "description": "支持全文搜索"}], "keywords": ["offline Markdown notes", "backlinks", "full text search"]},
+      "repositories": [{"full_name": "demo/note-local", "description": "Notes", "stars": 3100}, {"full_name": "demo/markdown-editor", "description": "Editor", "stars": 7200}],
+      "documents": {"demo/note-local": {"README.md": "Offline-first Markdown notes with backlinks and full text search."}, "demo/markdown-editor": {"README.md": "A browser Markdown editor."}},
+      "assessments": {"demo/note-local": {"summary": "matches", "criteria": [{"requirement_id": "backlinks", "status": "satisfied", "evidence": "backlinks", "source_path": "README.md"}, {"requirement_id": "search", "status": "satisfied", "evidence": "full text search", "source_path": "README.md"}]}, "demo/markdown-editor": {"summary": "unrelated", "criteria": []}},
+      "relevant_repositories": ["demo/note-local"], "expected_evidence": ["demo/note-local:backlinks", "demo/note-local:search"]
+    },
+    {
+      "id": "api_gateway",
+      "query": "轻量 API gateway，需要限流和 JWT 验证",
+      "intent": {"goal": "lightweight API gateway", "requirements": [{"id": "rate", "description": "支持限流"}, {"id": "jwt", "description": "支持 JWT 验证"}], "keywords": ["API gateway", "rate limiting", "JWT"]},
+      "repositories": [{"full_name": "demo/gate-lite", "description": "Gateway", "stars": 1800}, {"full_name": "demo/jwt-lib", "description": "JWT library", "stars": 9000}],
+      "documents": {"demo/gate-lite": {"README.md": "A lightweight gateway with rate limiting and token validation."}, "demo/jwt-lib": {"README.md": "Encode and decode JWT tokens."}},
+      "assessments": {"demo/gate-lite": {"summary": "partial", "criteria": [{"requirement_id": "rate", "status": "satisfied", "evidence": "rate limiting", "source_path": "README.md"}, {"requirement_id": "jwt", "status": "unknown"}]}, "demo/jwt-lib": {"summary": "unrelated", "criteria": []}},
+      "relevant_repositories": ["demo/gate-lite"], "expected_evidence": ["demo/gate-lite:rate", "demo/gate-lite:jwt"], "known_failure": "semantic synonym not recognized as JWT evidence"
+    },
+    {
+      "id": "feature_flags",
+      "query": "开源 Feature Flag 服务，需要多环境和审计历史",
+      "intent": {"goal": "feature flag service", "requirements": [{"id": "env", "description": "支持多环境"}, {"id": "audit", "description": "支持审计历史"}], "keywords": ["feature flags", "environments", "audit history"]},
+      "repositories": [{"full_name": "demo/flag-service", "description": "Flags", "stars": 1000}, {"full_name": "demo/config-reader", "description": "Config", "stars": 2600}],
+      "documents": {"demo/flag-service": {"README.md": "Manage flags across multiple environments with audit history."}, "demo/config-reader": {"README.md": "Read configuration files."}},
+      "assessments": {"demo/flag-service": {"summary": "matches", "criteria": [{"requirement_id": "env", "status": "satisfied", "evidence": "multiple environments", "source_path": "README.md"}, {"requirement_id": "audit", "status": "satisfied", "evidence": "audit history", "source_path": "README.md"}]}, "demo/config-reader": {"summary": "unrelated", "criteria": []}},
+      "relevant_repositories": ["demo/flag-service"], "expected_evidence": ["demo/flag-service:env", "demo/flag-service:audit"]
+    },
+    {
+      "id": "log_viewer",
+      "query": "浏览器日志查看器，需要实时 tail 和正则过滤",
+      "intent": {"goal": "web log viewer", "requirements": [{"id": "tail", "description": "支持实时 tail"}, {"id": "regex", "description": "支持正则过滤"}], "keywords": ["web log viewer", "live tail", "regex filter"]},
+      "repositories": [{"full_name": "demo/log-web", "description": "Logs", "stars": 850}, {"full_name": "demo/regex-ui", "description": "Regex tester", "stars": 4000}],
+      "documents": {"demo/log-web": {"README.md": "Stream logs with live tail and filter lines using regular expressions."}, "demo/regex-ui": {"README.md": "Test regular expressions online."}},
+      "assessments": {"demo/log-web": {"summary": "partial", "criteria": [{"requirement_id": "tail", "status": "satisfied", "evidence": "live tail", "source_path": "README.md"}, {"requirement_id": "regex", "status": "unknown"}]}, "demo/regex-ui": {"summary": "unrelated", "criteria": []}},
+      "relevant_repositories": ["demo/log-web"], "expected_evidence": ["demo/log-web:tail", "demo/log-web:regex"], "known_failure": "regular expressions synonym missed"
+    },
+    {
+      "id": "backup_tool",
+      "query": "增量备份工具，需要 S3 和加密",
+      "intent": {"goal": "incremental backup", "requirements": [{"id": "s3", "description": "支持 S3"}, {"id": "encrypt", "description": "支持加密"}], "keywords": ["incremental backup", "S3", "encryption"]},
+      "repositories": [{"full_name": "demo/safe-backup", "description": "Backup", "stars": 2300}, {"full_name": "demo/s3-client", "description": "S3 client", "stars": 3700}],
+      "documents": {"demo/safe-backup": {"README.md": "Incremental backups to S3 with client-side encryption."}, "demo/s3-client": {"README.md": "Upload files to S3."}},
+      "assessments": {"demo/safe-backup": {"summary": "matches", "criteria": [{"requirement_id": "s3", "status": "satisfied", "evidence": "to S3", "source_path": "README.md"}, {"requirement_id": "encrypt", "status": "satisfied", "evidence": "client-side encryption", "source_path": "README.md"}]}, "demo/s3-client": {"summary": "partial", "criteria": [{"requirement_id": "s3", "status": "satisfied", "evidence": "to S3", "source_path": "README.md"}]}},
+      "relevant_repositories": ["demo/safe-backup"], "expected_evidence": ["demo/safe-backup:s3", "demo/safe-backup:encrypt"]
+    },
+    {
+      "id": "pdf_extraction",
+      "query": "Python PDF 表格提取项目，需要扫描件 OCR 和 CSV 导出",
+      "intent": {"goal": "extract PDF tables", "requirements": [{"id": "ocr", "description": "支持扫描件 OCR"}, {"id": "csv", "description": "支持 CSV 导出"}], "keywords": ["PDF table extraction", "OCR", "CSV export"], "language": "Python"},
+      "repositories": [{"full_name": "demo/pdf-tables", "description": "PDF extraction", "stars": 1100}, {"full_name": "demo/pdf-reader", "description": "PDF text", "stars": 5600}],
+      "documents": {"demo/pdf-tables": {"README.md": "Extract tables from scanned PDFs using OCR."}, "demo/pdf-reader": {"README.md": "Read text from digital PDF files."}},
+      "assessments": {"demo/pdf-tables": {"summary": "partial", "criteria": [{"requirement_id": "ocr", "status": "satisfied", "evidence": "using OCR", "source_path": "README.md"}, {"requirement_id": "csv", "status": "unknown"}]}, "demo/pdf-reader": {"summary": "unrelated", "criteria": []}},
+      "relevant_repositories": ["demo/pdf-tables"], "expected_evidence": ["demo/pdf-tables:ocr", "demo/pdf-tables:csv"], "known_failure": "required CSV export is undocumented"
+    }
+  ]
+}

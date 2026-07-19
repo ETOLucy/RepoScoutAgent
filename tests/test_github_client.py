@@ -1,32 +1,21 @@
+import asyncio
 import base64
 import unittest
 from collections.abc import Callable
-from unittest.mock import patch
 
 import httpx
 
-from src.reposcout.github_client import (
-    GitHubSearchError,
-    fetch_repository_documents,
-    search_repositories,
-)
+from src.reposcout.github_client import GitHubClient, GitHubSearchError
 
 Handler = Callable[[httpx.Request], httpx.Response]
 
 
-def _client_with(handler: Handler) -> httpx.Client:
-    return httpx.Client(transport=httpx.MockTransport(handler))
+def _async_client(handler: Handler) -> httpx.AsyncClient:
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
 
-def _status_handler(status: int) -> Handler:
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(status, request=request)
-
-    return handler
-
-
-class GitHubClientTest(unittest.TestCase):
-    def test_fetch_repository_documents_reads_readme_and_docs(self):
+class GitHubClientTest(unittest.IsolatedAsyncioTestCase):
+    async def test_fetch_repository_documents_reads_readme_and_docs(self):
         def handler(request: httpx.Request) -> httpx.Response:
             if "/git/trees/" in request.url.path:
                 return httpx.Response(
@@ -43,15 +32,13 @@ class GitHubClientTest(unittest.TestCase):
             content = base64.b64encode(path.encode()).decode()
             return httpx.Response(200, json={"encoding": "base64", "content": content})
 
-        with patch(
-            "src.reposcout.github_client.httpx.Client",
-            return_value=_client_with(handler),
-        ):
-            result = fetch_repository_documents("example/repo", "main")
+        async with _async_client(handler) as transport_client:
+            client = GitHubClient(transport_client)
+            result = await client.fetch_repository_documents("example/repo", "main")
 
         self.assertEqual([item["path"] for item in result], ["README.md", "docs/setup.md"])
 
-    def test_search_maps_repository_and_limits_page_size(self):
+    async def test_search_maps_repository_and_limits_page_size(self):
         def handler(request: httpx.Request) -> httpx.Response:
             self.assertEqual(request.url.params["per_page"], "30")
             return httpx.Response(
@@ -80,11 +67,8 @@ class GitHubClientTest(unittest.TestCase):
                 },
             )
 
-        with patch(
-            "src.reposcout.github_client.httpx.Client",
-            return_value=_client_with(handler),
-        ):
-            result = search_repositories("agent", limit=100)
+        async with _async_client(handler) as transport_client:
+            result = await GitHubClient(transport_client).search_repositories("agent", limit=100)
 
         self.assertEqual(result[0]["full_name"], "example/repo")
         self.assertEqual(result[0]["description"], "暂无项目描述")
@@ -92,56 +76,100 @@ class GitHubClientTest(unittest.TestCase):
         self.assertEqual(result[0]["pushed_at"], "2026-01-01T00:00:00Z")
         self.assertEqual(result[0]["size"], 42)
 
-    def test_rate_limit_errors_are_user_visible(self):
+    async def test_rate_limit_errors_are_not_retried(self):
         for status in (403, 429):
-            with (
-                self.subTest(status=status),
-                patch(
-                    "src.reposcout.github_client.httpx.Client",
-                    return_value=_client_with(_status_handler(status)),
-                ),
-                self.assertRaisesRegex(GitHubSearchError, "请求受限"),
-            ):
-                search_repositories("agent")
+            calls = 0
 
-    def test_timeout_is_converted_to_domain_error(self):
+            def handler(
+                request: httpx.Request, response_status: int = status
+            ) -> httpx.Response:
+                nonlocal calls
+                calls += 1
+                return httpx.Response(response_status, request=request)
+
+            with self.subTest(status=status):
+                async with _async_client(handler) as transport_client:
+                    client = GitHubClient(transport_client, backoff_seconds=0)
+                    with self.assertRaisesRegex(GitHubSearchError, "请求受限"):
+                        await client.search_repositories("agent")
+                self.assertEqual(calls, 1)
+
+    async def test_timeout_is_retried_with_a_finite_limit(self):
+        calls = 0
+
         def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
             raise httpx.ConnectTimeout("timed out", request=request)
 
-        with (
-            patch(
-                "src.reposcout.github_client.httpx.Client",
-                return_value=_client_with(handler),
-            ),
-            self.assertRaisesRegex(GitHubSearchError, "无法连接 GitHub"),
-        ):
-            search_repositories("agent")
+        async with _async_client(handler) as transport_client:
+            client = GitHubClient(transport_client, max_attempts=3, backoff_seconds=0)
+            with self.assertRaisesRegex(GitHubSearchError, "无法连接 GitHub"):
+                await client.search_repositories("agent")
 
-    def test_malformed_json_is_converted_to_domain_error(self):
-        def handler(_request: httpx.Request) -> httpx.Response:
-            return httpx.Response(200, content=b"not-json")
+        self.assertEqual(calls, 3)
 
-        with (
-            patch(
-                "src.reposcout.github_client.httpx.Client",
-                return_value=_client_with(handler),
-            ),
-            self.assertRaisesRegex(GitHubSearchError, "无法解析的 JSON"),
-        ):
-            search_repositories("agent")
+    async def test_server_error_is_retried_then_succeeds(self):
+        calls = 0
 
-    def test_malformed_payload_is_converted_to_domain_error(self):
-        def handler(_request: httpx.Request) -> httpx.Response:
-            return httpx.Response(200, json={"items": {"unexpected": "object"}})
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            if calls < 3:
+                return httpx.Response(503, request=request)
+            return httpx.Response(200, json={"items": []}, request=request)
 
-        with (
-            patch(
-                "src.reposcout.github_client.httpx.Client",
-                return_value=_client_with(handler),
-            ),
-            self.assertRaisesRegex(GitHubSearchError, "items 列表"),
-        ):
-            search_repositories("agent")
+        async with _async_client(handler) as transport_client:
+            client = GitHubClient(transport_client, max_attempts=3, backoff_seconds=0)
+            result = await client.search_repositories("agent")
+
+        self.assertEqual(result, [])
+        self.assertEqual(calls, 3)
+
+    async def test_malformed_payload_is_converted_to_domain_error(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"items": {}}, request=request)
+
+        async with _async_client(handler) as transport_client:
+            with self.assertRaisesRegex(GitHubSearchError, "items 列表"):
+                await GitHubClient(transport_client).search_repositories("agent")
+
+    async def test_shared_semaphore_limits_concurrency(self):
+        active = 0
+        peak = 0
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            await asyncio.sleep(0.01)
+            active -= 1
+            return httpx.Response(200, json={"items": []}, request=request)
+
+        async with _async_client(handler) as transport_client:
+            client = GitHubClient(transport_client, max_concurrency=2)
+            await asyncio.gather(*(client.search_repositories(str(item)) for item in range(6)))
+
+        self.assertEqual(peak, 2)
+
+    async def test_cancellation_is_not_retried(self):
+        calls = 0
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            await asyncio.sleep(10)
+            return httpx.Response(200, json={"items": []}, request=request)
+
+        async with _async_client(handler) as transport_client:
+            client = GitHubClient(transport_client, backoff_seconds=0)
+            task = asyncio.create_task(client.search_repositories("agent"))
+            await asyncio.sleep(0)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+
+        self.assertEqual(calls, 1)
 
 
 if __name__ == "__main__":
