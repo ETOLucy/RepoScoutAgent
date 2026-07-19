@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RepoScout · GitHub 项目发现 Agent</title>
+  <style>
+    :root{--ink:#15231d;--muted:#63716a;--line:#dce4df;--bg:#f3f6f4;--panel:#fff;--green:#167656;--soft:#e8f4ee;--amber:#a85f11}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 Inter,"Microsoft YaHei",system-ui,sans-serif}
+    button,textarea{font:inherit}.shell{min-height:100vh;display:grid;grid-template-columns:230px 1fr}
+    aside{background:#17251f;color:white;padding:24px 18px}.brand{font-size:18px;font-weight:750;display:flex;align-items:center;gap:10px}.mark{width:31px;height:31px;background:#5acb98;color:#11251c;display:grid;place-items:center;border-radius:6px}
+    nav{margin-top:34px}.nav{padding:10px 12px;color:#9eafa7;border-radius:5px;margin:4px 0}.nav.active{background:#2a4037;color:white}.status{position:fixed;bottom:24px;color:#96a8a0;font-size:12px}.dot{display:inline-block;width:7px;height:7px;background:#54c795;border-radius:50%;margin-right:7px}
+    main{min-width:0}.top{height:66px;background:white;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 30px}.top strong{font-size:16px}.badge{background:var(--soft);color:var(--green);padding:4px 8px;border-radius:4px;font-size:12px}
+    .content{max-width:1160px;margin:0 auto;padding:30px}.intro{display:grid;grid-template-columns:1fr auto;align-items:end;gap:20px;margin-bottom:18px}.intro h1{font-size:25px;margin:0 0 5px}.intro p{margin:0;color:var(--muted)}
+    .search{background:white;border:1px solid var(--line);padding:14px}.search textarea{border:0;outline:0;resize:none;width:100%;height:78px;padding:7px;color:var(--ink)}.actions{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #edf0ee;padding-top:10px}.hint{font-size:12px;color:#849089}.primary{border:0;background:var(--green);color:white;padding:8px 16px;border-radius:5px;font-weight:650;cursor:pointer}.primary:disabled{opacity:.55}
+    .summary{display:none;margin:18px 0 10px;padding:12px 14px;border-left:3px solid var(--green);background:#fff;color:#435149}.query{font-family:Consolas,monospace;color:var(--green)}
+    .results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}.card{background:white;border:1px solid var(--line);padding:17px;min-width:0}.card-head{display:flex;justify-content:space-between;gap:10px}.repo{font-size:15px;color:var(--green);font-weight:700;text-decoration:none;overflow-wrap:anywhere}.score{flex:none;font-size:12px;background:var(--soft);color:var(--green);padding:3px 7px;border-radius:4px}.desc{color:#53615a;min-height:44px;margin:10px 0}.meta{display:flex;gap:12px;color:#758179;font-size:12px;flex-wrap:wrap}.reason{margin-top:12px;padding-top:11px;border-top:1px solid #edf0ee;color:#435149}.risk{color:var(--amber);margin-top:6px}.empty{grid-column:1/-1;padding:60px;text-align:center;color:var(--muted)}
+    @media(max-width:800px){.shell{grid-template-columns:68px 1fr}aside{padding:18px}.brand span,nav,.status{display:none}.content{padding:18px}.results{grid-template-columns:1fr}}
+    @media(max-width:520px){.shell{display:block}aside{display:none}.top{padding:0 16px}.content{padding:14px}.intro{display:block}.intro h1{font-size:21px}.badge{display:none}}
+  </style>
+</head>
+<body>
+<div class="shell">
+  <aside>
+    <div class="brand"><div class="mark">R</div><span>RepoScout</span></div>
+    <nav><div class="nav active">⌕ 项目发现</div><div class="nav">◇ 推荐记录</div><div class="nav">▤ 项目对比</div></nav>
+    <div class="status"><span class="dot"></span>LangGraph Agent 就绪</div>
+  </aside>
+  <main>
+    <header class="top"><strong>GitHub 项目发现 Agent</strong><span class="badge">MVP · 实时 GitHub 数据</span></header>
+    <div class="content">
+      <div class="intro"><div><h1>描述你真正想找的项目</h1><p>不必拼凑搜索关键词，直接说明用途、技术栈和限制条件。</p></div></div>
+      <form class="search" id="form">
+        <textarea id="requirement" placeholder="例如：我想找适合 Agent 开发实习学习的 Python LangGraph 项目，至少 20 stars，近期仍在维护。" required></textarea>
+        <div class="actions"><span class="hint">当前版本分析仓库元数据，README 深度分析将在下一阶段加入</span><button class="primary" id="submit">开始搜索</button></div>
+      </form>
+      <div class="summary" id="summary"></div>
+      <div class="results" id="results"></div>
+    </div>
+  </main>
+</div>
+<script>
+  const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  document.getElementById("form").addEventListener("submit",async e=>{
+    e.preventDefault();const requirement=document.getElementById("requirement").value.trim(),btn=document.getElementById("submit"),summary=document.getElementById("summary"),results=document.getElementById("results");
+    btn.disabled=true;btn.textContent="Graph 执行中";summary.style.display="block";summary.textContent="正在解析需求并检索 GitHub…";results.innerHTML="";
+    try{
+      const response=await fetch("/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requirement})});
+      const data=await response.json();summary.innerHTML=`${esc(data.report)}${data.query?`<br><span class="query">${esc(data.query)}</span>`:""}`;
+      if(!data.recommendations?.length){results.innerHTML=`<div class="empty">${esc(data.error||"没有可展示的结果")}</div>`;return}
+      results.innerHTML=data.recommendations.map(repo=>`<article class="card"><div class="card-head"><a class="repo" href="${esc(repo.url)}" target="_blank" rel="noreferrer">${esc(repo.full_name)}</a><span class="score">${esc(repo.score)} 分</span></div><div class="desc">${esc(repo.description)}</div><div class="meta"><span>★ ${repo.stars}</span><span>⑂ ${repo.forks}</span><span>${esc(repo.language||"未知语言")}</span><span>${esc(repo.license)}</span></div><div class="reason"><strong>推荐依据</strong><br>${repo.reasons.map(esc).join(" · ")}${repo.risks.length?`<div class="risk">${repo.risks.map(esc).join(" · ")}</div>`:""}</div></article>`).join("");
+    }catch{summary.textContent="服务请求失败，请确认应用仍在运行。"}finally{btn.disabled=false;btn.textContent="开始搜索"}
+  });
+</script>
+</body>
+</html>
