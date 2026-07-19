@@ -2,7 +2,13 @@ import unittest
 from types import SimpleNamespace
 
 from evals.search_quality import evaluate_search_stages
-from src.reposcout.reranking import rerank_repositories, task_contract_text
+from src.reposcout.reranking import (
+    close_embedding_circuit,
+    embedding_circuit_open,
+    open_embedding_circuit,
+    rerank_repositories,
+    task_contract_text,
+)
 from src.reposcout.search.models import RequirementItem, SearchIntent, SearchStrategy
 
 
@@ -18,6 +24,9 @@ class FakeEmbeddings:
 
 
 class RepositoryRerankingTest(unittest.IsolatedAsyncioTestCase):
+    def tearDown(self):
+        close_embedding_circuit()
+
     def setUp(self):
         self.intent = SearchIntent(
             goal="learn representative neural retrieval implementations",
@@ -82,6 +91,12 @@ class RepositoryRerankingTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["relevant_not_discovered"], ["missing/d"])
         self.assertEqual(result["relevant_dropped_before_inspection"], ["good/b"])
         self.assertAlmostEqual(result["recall_at_analysis_cutoff"], 0.5)
+
+    def test_embedding_circuit_expires_or_can_be_closed(self):
+        open_embedding_circuit(60)
+        self.assertTrue(embedding_circuit_open())
+        close_embedding_circuit()
+        self.assertFalse(embedding_circuit_open())
 
 
 if __name__ == "__main__":

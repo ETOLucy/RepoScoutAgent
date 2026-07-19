@@ -116,7 +116,21 @@
 - [ ] 证据不足时允许一次有预算的补充查询
 - [x] 将必需条件的 `violated` 作为淘汰条件，而不只是降低分数
 - [ ] 增加请求级 API、Token、GitHub 配额和耗时预算
-- [ ] 增加结构化 trace ID 与节点耗时日志
+- [x] 增加节点耗时并通过 JSON/SSE 暴露
+- [ ] 增加结构化 trace ID、调用数、Token 和成本日志
+
+### Performance Engineering v1
+
+详细 Milestone、建议 Issues 和验收标准见
+[`docs/PERFORMANCE_MILESTONE.md`](docs/PERFORMANCE_MILESTONE.md)。
+
+- [x] embedding 跨请求 TTL 熔断，避免重复探测不可用 provider
+- [x] SSE 提前展示暂定候选、分析候选数和节点耗时
+- [ ] 建立可复现的冷/热缓存 p50/p95 与 TTFC/TTFV 基线
+- [ ] 流式返回逐仓库 verified 结果
+- [ ] 复用多轮会话的候选、文档与证据判断
+- [ ] 评测自适应 6/8/12/24 分析预算
+- [ ] 实验每批 2–3 个仓库的 LLM 结构化判断
 
 ## Deferred Decisions
 

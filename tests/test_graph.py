@@ -86,6 +86,8 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertGreater(len(result["executed_queries"]), 1)
         self.assertEqual(result["recommendations"][0]["document_paths"], ["README.md"])
+        self.assertIn("match_documents", result["node_timings"])
+        self.assertGreaterEqual(result["node_timings"]["match_documents"], 0)
 
     @patch("src.reposcout.nodes._openai_client")
     @patch.dict(environ, {"OPENAI_API_KEY": "test-key"})

@@ -17,6 +17,7 @@ class RepoScoutState(TypedDict, total=False):
     analysis_candidates: list[dict[str, Any]]
     effective_retrieval_mode: str
     embedding_available: bool
+    node_timings: dict[str, float]
     rejected_candidates: list[dict[str, Any]]
     recommendations: list[dict[str, Any]]
     warnings: list[str]

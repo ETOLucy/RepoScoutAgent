@@ -15,7 +15,12 @@ from .github_client import (
     GitHubSearchError,
     get_github_client,
 )
-from .reranking import rerank_repositories
+from .reranking import (
+    close_embedding_circuit,
+    embedding_circuit_open,
+    open_embedding_circuit,
+    rerank_repositories,
+)
 from .retrieval import (
     format_requirement_context,
     prewarm_retrieval_embeddings,
@@ -253,6 +258,14 @@ async def rank_candidates(state: RepoScoutState) -> dict[str, Any]:
     warnings = list(state.get("warnings", []))
     client = _openai_client() if os.getenv("OPENAI_API_KEY") else None
     embedding_available = client is not None
+    if client and embedding_circuit_open():
+        ranked = await rerank_repositories(intent, candidates)
+        warnings.append("Embedding circuit is open; used deterministic repository ranking")
+        return {
+            "ranked_candidates": ranked,
+            "embedding_available": False,
+            "warnings": warnings,
+        }
     try:
         ranked = await rerank_repositories(
             intent,
@@ -260,6 +273,8 @@ async def rank_candidates(state: RepoScoutState) -> dict[str, Any]:
             client=client,
             embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
         )
+        if client:
+            close_embedding_circuit()
     except Exception as exc:
         warnings.append(
             "Repository semantic reranking failed; used deterministic ranking: "
@@ -267,6 +282,9 @@ async def rank_candidates(state: RepoScoutState) -> dict[str, Any]:
         )
         ranked = await rerank_repositories(intent, candidates)
         embedding_available = False
+        open_embedding_circuit(
+            float(os.getenv("EMBEDDING_CIRCUIT_TTL_SECONDS", "600"))
+        )
     return {
         "ranked_candidates": ranked,
         "embedding_available": embedding_available,

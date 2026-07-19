@@ -9,8 +9,13 @@ from main import app
 class StreamingGraph:
     async def astream(self, _state, stream_mode):
         self.stream_mode = stream_mode
-        yield {"validate_request": {}}
-        yield {"generate_report": {"report": "done"}}
+        yield {"validate_request": {"node_timings": {"validate_request": 1.5}}}
+        yield {
+            "generate_report": {
+                "report": "done",
+                "node_timings": {"validate_request": 1.5, "generate_report": 2.0},
+            }
+        }
 
 
 class ApiTest(unittest.IsolatedAsyncioTestCase):
@@ -50,6 +55,7 @@ class ApiTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("event: progress", response.text)
+        self.assertIn("duration_ms", response.text)
         self.assertIn('event: result\ndata: {"requirement":{}', response.text)
         self.assertEqual(graph.stream_mode, "updates")
 

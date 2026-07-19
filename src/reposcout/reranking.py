@@ -3,11 +3,28 @@ from __future__ import annotations
 import math
 import re
 from datetime import UTC, datetime
+from time import monotonic
 from typing import Any
 
 from openai import AsyncOpenAI
 
 from .search.models import SearchIntent
+
+_EMBEDDING_FAILURE_UNTIL = 0.0
+
+
+def embedding_circuit_open() -> bool:
+    return monotonic() < _EMBEDDING_FAILURE_UNTIL
+
+
+def open_embedding_circuit(ttl_seconds: float = 600.0) -> None:
+    global _EMBEDDING_FAILURE_UNTIL
+    _EMBEDDING_FAILURE_UNTIL = monotonic() + max(0.0, ttl_seconds)
+
+
+def close_embedding_circuit() -> None:
+    global _EMBEDDING_FAILURE_UNTIL
+    _EMBEDDING_FAILURE_UNTIL = 0.0
 
 
 def _tokens(text: str) -> set[str]:

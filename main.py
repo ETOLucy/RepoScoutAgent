@@ -49,6 +49,7 @@ class SearchResponse(BaseModel):
     error: str = ""
     conversation_id: str = ""
     turn: int = 1
+    node_timings: dict[str, float] = Field(default_factory=dict)
 
 
 def _response_payload(
@@ -118,7 +119,24 @@ async def search_stream(request: SearchRequest) -> StreamingResponse:
                 for node, values in update.items():
                     if isinstance(values, dict):
                         state.update(values)
-                    yield _sse("progress", {"node": node})
+                    progress: dict[str, Any] = {"node": node}
+                    timings = values.get("node_timings", {}) if isinstance(values, dict) else {}
+                    if node in timings:
+                        progress["duration_ms"] = timings[node]
+                    if node == "rank_candidates":
+                        progress["candidates"] = [
+                            {
+                                "full_name": item.get("full_name"),
+                                "description": item.get("description"),
+                                "score": item.get("repository_ranking", {}).get("score"),
+                            }
+                            for item in values.get("ranked_candidates", [])[:5]
+                        ]
+                    if node == "prepare_evidence":
+                        progress["analysis_count"] = len(
+                            values.get("analysis_candidates", [])
+                        )
+                    yield _sse("progress", progress)
             _remember_clarification(conversation_id, state)
             yield _sse("result", _response_payload(state, conversation_id, turn))
         except asyncio.CancelledError:

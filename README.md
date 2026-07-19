@@ -258,6 +258,8 @@ L2 静态证据门槛评测：
 
 性能优化的完整 STAR 记录、真实前后对照、简历表述和后续更新协议见
 [docs/PERFORMANCE_STAR.md](docs/PERFORMANCE_STAR.md)。该文档作为长期历史档案保留，后续优化追加或修订，不删除旧基线。
+下一阶段的性能 Milestone、建议 Issues 和质量门槛见
+[docs/PERFORMANCE_MILESTONE.md](docs/PERFORMANCE_MILESTONE.md)。
 
 后续路线见 [TODO.md](TODO.md)。
 

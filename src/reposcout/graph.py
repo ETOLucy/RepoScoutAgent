@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 from langgraph.graph import END, START, StateGraph
 
@@ -15,6 +15,12 @@ from .nodes import (
     validate_request,
 )
 from .state import RepoScoutState
+from .telemetry import timed_node
+
+
+def _timed(name: str, node: Any) -> Any:
+    # LangGraph's overloaded node protocol cannot represent this async decorator.
+    return cast(Any, timed_node(name, node))
 
 
 def _route_validation(state: RepoScoutState) -> str:
@@ -33,17 +39,22 @@ def _invalid_request(state: RepoScoutState) -> dict[str, str]:
 
 def build_graph() -> Any:
     builder = StateGraph(RepoScoutState)
-    builder.add_node("validate_request", validate_request)
+    builder.add_node("validate_request", _timed("validate_request", validate_request))
     builder.add_node("invalid_request", _invalid_request)
-    builder.add_node("understand_requirement", understand_requirement)
+    builder.add_node(
+        "understand_requirement",
+        _timed("understand_requirement", understand_requirement),
+    )
     builder.add_node("request_clarification", request_clarification)
-    builder.add_node("plan_search", plan_search)
-    builder.add_node("search_github", search_github)
-    builder.add_node("rank_candidates", rank_candidates)
-    builder.add_node("inspect_documents", inspect_documents)
-    builder.add_node("prepare_evidence", prepare_evidence)
-    builder.add_node("match_documents", match_documents)
-    builder.add_node("generate_report", generate_report)
+    builder.add_node("plan_search", _timed("plan_search", plan_search))
+    builder.add_node("search_github", _timed("search_github", search_github))
+    builder.add_node("rank_candidates", _timed("rank_candidates", rank_candidates))
+    builder.add_node(
+        "inspect_documents", _timed("inspect_documents", inspect_documents)
+    )
+    builder.add_node("prepare_evidence", _timed("prepare_evidence", prepare_evidence))
+    builder.add_node("match_documents", _timed("match_documents", match_documents))
+    builder.add_node("generate_report", _timed("generate_report", generate_report))
 
     builder.add_edge(START, "validate_request")
     builder.add_conditional_edges(
