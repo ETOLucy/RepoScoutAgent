@@ -4,8 +4,12 @@ from typing import Any, TypedDict
 class RepoScoutState(TypedDict, total=False):
     raw_requirement: str
     requirement: dict[str, Any]
+    requirement_parser: str
+    warnings: list[str]
     query: str
     candidates: list[dict[str, Any]]
+    rejected_candidates: list[dict[str, Any]]
     recommendations: list[dict[str, Any]]
     report: str
     error: str
+    rate_limit: dict[str, Any]

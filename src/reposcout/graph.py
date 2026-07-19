@@ -1,6 +1,6 @@
 from langgraph.graph import END, START, StateGraph
 
-from .nodes import generate_report, parse_requirement, rank_candidates, search_github
+from .nodes import generate_report, llm_parse_requirement, rank_candidates, search_github
 from .state import RepoScoutState
 
 
@@ -14,7 +14,7 @@ def invalid_request(state: RepoScoutState) -> dict[str, str]:
 
 def build_graph():
     builder = StateGraph(RepoScoutState)
-    builder.add_node("parse_requirement", parse_requirement)
+    builder.add_node("parse_requirement", llm_parse_requirement)
     builder.add_node("invalid_request", invalid_request)
     builder.add_node("search_github", search_github)
     builder.add_node("rank_candidates", rank_candidates)

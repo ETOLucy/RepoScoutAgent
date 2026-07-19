@@ -1,4 +1,4 @@
-"""RepoScout recommendation agent."""
+"""RepoScoutAgent recommendation agent."""
 
 from .graph import build_graph
 

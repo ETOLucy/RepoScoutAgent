@@ -37,7 +37,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if urlparse(self.path).path == "/api/health":
-            self.send_json({"status": "ok", "graph": "reposcout-mvp"})
+            self.send_json({"status": "ok", "graph": "reposcout-agent-mvp"})
             return
         super().do_GET()
 
@@ -54,6 +54,10 @@ class Handler(SimpleHTTPRequestHandler):
                     "query": result.get("query", ""),
                     "report": result.get("report", ""),
                     "recommendations": result.get("recommendations", []),
+                    "rejected_candidates": result.get("rejected_candidates", []),
+                    "requirement_parser": result.get("requirement_parser", ""),
+                    "warnings": result.get("warnings", []),
+                    "rate_limit": result.get("rate_limit", {}),
                     "error": result.get("error", ""),
                 },
                 HTTPStatus.BAD_REQUEST
@@ -67,5 +71,5 @@ class Handler(SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "8000"))
-    print(f"RepoScout 已启动：http://{host}:{port}")
+    print(f"RepoScoutAgent 已启动：http://{host}:{port}")
     ThreadingHTTPServer((host, port), Handler).serve_forever()
