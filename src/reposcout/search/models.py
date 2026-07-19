@@ -7,6 +7,17 @@ class RequirementItem(BaseModel):
     id: str = Field(min_length=1, max_length=40)
     description: str = Field(min_length=1, max_length=240)
     required: bool = True
+    retrieval_terms: list[str] = Field(default_factory=list, max_length=8)
+    evidence_sources: list[str] = Field(default_factory=list, max_length=6)
+
+
+class SearchStrategy(BaseModel):
+    strategy_type: str = Field(min_length=1, max_length=60)
+    terms: list[str] = Field(min_length=1, max_length=3)
+    rationale: str = Field(min_length=1, max_length=240)
+    hypothesis: str = Field(default="", max_length=400)
+    expected_signals: list[str] = Field(default_factory=list, max_length=6)
+    verifies: list[str] = Field(default_factory=list, max_length=8)
 
 
 class SearchIntent(BaseModel):
@@ -14,6 +25,7 @@ class SearchIntent(BaseModel):
     requirements: list[RequirementItem] = Field(default_factory=list)
     excluded: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list, max_length=8)
+    search_strategies: list[SearchStrategy] = Field(default_factory=list, max_length=6)
     language: str | None = None
     minimum_stars: int = Field(default=0, ge=0)
     licenses: list[str] = Field(default_factory=list)
@@ -25,6 +37,11 @@ class SearchQuery(BaseModel):
     query: str
     keywords: list[str]
     fingerprint: str
+    strategy_type: str = "rules_fallback"
+    rationale: str = "Deterministic fallback query"
+    hypothesis: str = ""
+    expected_signals: list[str] = Field(default_factory=list)
+    verifies: list[str] = Field(default_factory=list)
 
 
 class SearchPlan(BaseModel):
@@ -39,6 +56,13 @@ class CriterionMatch(BaseModel):
     status: Literal["satisfied", "violated", "unknown"]
     evidence: str | None = None
     source_path: str | None = None
+    source_commit_sha: str | None = None
+    implementation_status: Literal[
+        "implemented", "documented_only", "uncertain", "contradicted"
+    ] = "uncertain"
+    implementation_evidence: str | None = None
+    implementation_source_path: str | None = None
+    implementation_source_commit_sha: str | None = None
 
 
 class RepositoryAssessment(BaseModel):

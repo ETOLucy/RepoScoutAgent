@@ -10,8 +10,13 @@ class RepoScoutState(TypedDict, total=False):
     search_plan: dict[str, Any]
     queries: list[dict[str, Any]]
     query: str
+    executed_queries: list[str]
     candidates: list[dict[str, Any]]
+    ranked_candidates: list[dict[str, Any]]
     document_candidates: list[dict[str, Any]]
+    analysis_candidates: list[dict[str, Any]]
+    effective_retrieval_mode: str
+    embedding_available: bool
     rejected_candidates: list[dict[str, Any]]
     recommendations: list[dict[str, Any]]
     warnings: list[str]

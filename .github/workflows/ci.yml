@@ -28,3 +28,10 @@ jobs:
           OPENAI_API_KEY: ""
           GITHUB_TOKEN: ""
         run: pytest
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build --tag reposcout-agent:ci .

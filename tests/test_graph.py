@@ -5,7 +5,11 @@ from unittest.mock import AsyncMock, patch
 
 from src.reposcout.github_client import GitHubSearchError
 from src.reposcout.graph import build_graph
-from src.reposcout.nodes import _validate_evidence
+from src.reposcout.nodes import (
+    _validate_evidence,
+    _validate_implementation_evidence,
+    match_documents,
+)
 from src.reposcout.search.models import (
     CriterionMatch,
     RepositoryAssessment,
@@ -70,10 +74,17 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
                 {"raw_requirement": "find Python photo backup project"}
             )
 
-        github.search_repositories.assert_awaited_once()
-        github.fetch_repository_documents.assert_awaited_once_with(
-            "example/photo-app", "main", max_documents=6
+        self.assertEqual(
+            github.search_repositories.await_count,
+            len(result["search_plan"]["queries"]),
         )
+        github.fetch_repository_documents.assert_awaited_once_with(
+            "example/photo-app",
+            "main",
+            max_documents=6,
+            implementation_terms=["find", "python", "photo", "backup", "project"],
+        )
+        self.assertGreater(len(result["executed_queries"]), 1)
         self.assertEqual(result["recommendations"][0]["document_paths"], ["README.md"])
 
     @patch("src.reposcout.nodes._openai_client")
@@ -129,7 +140,12 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
         second = {**REPOSITORY, "full_name": "example/broken"}
         github = github_mock([REPOSITORY, second], DOCUMENTS)
 
-        async def fetch(full_name: str, _branch: str, max_documents: int = 6):
+        async def fetch(
+            full_name: str,
+            _branch: str,
+            max_documents: int = 6,
+            implementation_terms: list[str] | None = None,
+        ):
             if full_name == "example/broken":
                 raise GitHubSearchError("timeout")
             return DOCUMENTS[:max_documents]
@@ -156,6 +172,116 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
         )
         result = _validate_evidence(assessment, DOCUMENTS)
         self.assertEqual(result.criteria[0].status, "unknown")
+
+    def test_wrong_commit_sha_is_downgraded_to_unknown(self):
+        assessment = RepositoryAssessment(
+            summary="test",
+            criteria=[
+                CriterionMatch(
+                    requirement_id="face",
+                    status="satisfied",
+                    evidence="face recognition",
+                    source_path="README.md",
+                    source_commit_sha="wrong-sha",
+                )
+            ],
+        )
+        documents = [{**DOCUMENTS[0], "commit_sha": "actual-sha"}]
+
+        result = _validate_evidence(assessment, documents)
+
+        self.assertEqual(result.criteria[0].status, "unknown")
+        self.assertIsNone(result.criteria[0].source_commit_sha)
+
+    @patch("src.reposcout.nodes._openai_client")
+    @patch.dict(
+        environ,
+        {"OPENAI_API_KEY": "test-key", "REPOSCOUT_RETRIEVAL_MODE": "full"},
+    )
+    async def test_required_violation_rejects_repository(self, mock_client):
+        assessment = RepositoryAssessment(
+            summary="conflicts with requirement",
+            criteria=[
+                CriterionMatch(
+                    requirement_id="docker",
+                    status="violated",
+                    evidence="Docker deployment",
+                    source_path="README.md",
+                )
+            ],
+        )
+        mock_client.return_value.responses.parse = AsyncMock(
+            return_value=SimpleNamespace(output_parsed=assessment)
+        )
+        state = {
+            "search_intent": SearchIntent(
+                goal="deployment",
+                requirements=[
+                    RequirementItem(id="docker", description="requires Docker")
+                ],
+                keywords=["deployment"],
+            ).model_dump(),
+            "document_candidates": [{**REPOSITORY, "documents": DOCUMENTS}],
+        }
+
+        result = await match_documents(state)
+
+        self.assertEqual(result["recommendations"], [])
+        self.assertIn("明确冲突", result["rejected_candidates"][0]["reasons"][0])
+
+    def test_manifest_alone_cannot_prove_implementation(self):
+        assessment = RepositoryAssessment(
+            summary="dependency only",
+            criteria=[
+                CriterionMatch(
+                    requirement_id="sso",
+                    status="satisfied",
+                    implementation_status="implemented",
+                    implementation_evidence='"saml2-js"',
+                    implementation_source_path="package.json",
+                    implementation_source_commit_sha="abc",
+                )
+            ],
+        )
+        documents = [
+            {
+                "path": "package.json",
+                "content": '{"dependencies":{"saml2-js":"1.0.0"}}',
+                "source_type": "manifest",
+                "commit_sha": "abc",
+            }
+        ]
+
+        result = _validate_implementation_evidence(assessment, documents)
+
+        self.assertEqual(result.criteria[0].implementation_status, "uncertain")
+
+    def test_source_quote_can_prove_static_implementation(self):
+        assessment = RepositoryAssessment(
+            summary="source evidence",
+            criteria=[
+                CriterionMatch(
+                    requirement_id="sso",
+                    status="satisfied",
+                    implementation_status="implemented",
+                    implementation_evidence="validateSamlResponse",
+                    implementation_source_path="src/auth/saml.ts",
+                    implementation_source_commit_sha="abc",
+                )
+            ],
+        )
+        documents = [
+            {
+                "path": "src/auth/saml.ts",
+                "content": "export function validateSamlResponse(input) {}",
+                "source_type": "implementation",
+                "commit_sha": "abc",
+            }
+        ]
+
+        result = _validate_implementation_evidence(assessment, documents)
+
+        self.assertEqual(result.criteria[0].implementation_status, "implemented")
 
 
 if __name__ == "__main__":

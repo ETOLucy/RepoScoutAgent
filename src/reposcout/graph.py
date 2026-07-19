@@ -7,6 +7,8 @@ from .nodes import (
     inspect_documents,
     match_documents,
     plan_search,
+    prepare_evidence,
+    rank_candidates,
     request_clarification,
     search_github,
     understand_requirement,
@@ -37,7 +39,9 @@ def build_graph() -> Any:
     builder.add_node("request_clarification", request_clarification)
     builder.add_node("plan_search", plan_search)
     builder.add_node("search_github", search_github)
+    builder.add_node("rank_candidates", rank_candidates)
     builder.add_node("inspect_documents", inspect_documents)
+    builder.add_node("prepare_evidence", prepare_evidence)
     builder.add_node("match_documents", match_documents)
     builder.add_node("generate_report", generate_report)
 
@@ -55,8 +59,10 @@ def build_graph() -> Any:
     builder.add_edge("invalid_request", END)
     builder.add_edge("request_clarification", END)
     builder.add_edge("plan_search", "search_github")
-    builder.add_edge("search_github", "inspect_documents")
-    builder.add_edge("inspect_documents", "match_documents")
+    builder.add_edge("search_github", "rank_candidates")
+    builder.add_edge("rank_candidates", "inspect_documents")
+    builder.add_edge("inspect_documents", "prepare_evidence")
+    builder.add_edge("prepare_evidence", "match_documents")
     builder.add_edge("match_documents", "generate_report")
     builder.add_edge("generate_report", END)
     return builder.compile()

@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
+from evals.search_quality import evaluate_search_stages
 from src.reposcout.graph import build_graph
 from src.reposcout.search.models import RepositoryAssessment, SearchIntent
 
@@ -47,6 +48,14 @@ class ReplayResponses:
         return SimpleNamespace(output_parsed=output)
 
 
+class ReplayEmbeddings:
+    async def create(self, **kwargs: Any) -> SimpleNamespace:
+        inputs = kwargs.get("input", [])
+        return SimpleNamespace(
+            data=[SimpleNamespace(embedding=[1.0]) for _item in inputs]
+        )
+
+
 def _repository(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "url": f"https://github.com/{raw['full_name']}",
@@ -78,7 +87,9 @@ def _unknown_assessment(intent: SearchIntent) -> RepositoryAssessment:
     )
 
 
-async def replay_case(case: dict[str, Any]) -> tuple[dict[str, Any], ReplayStats, float]:
+async def replay_case(
+    case: dict[str, Any], pipeline: str = "full_document_context"
+) -> tuple[dict[str, Any], ReplayStats, float]:
     intent = SearchIntent.model_validate(case["intent"])
     stats = ReplayStats()
     repositories = [_repository(item) for item in case["repositories"]]
@@ -96,7 +107,10 @@ async def replay_case(case: dict[str, Any]) -> tuple[dict[str, Any], ReplayStats
         return repositories[:limit]
 
     async def document_fixture(
-        full_name: str, _branch: str, max_documents: int = 6
+        full_name: str,
+        _branch: str,
+        max_documents: int = 6,
+        implementation_terms: list[str] | None = None,
     ) -> list[dict[str, str]]:
         stats.github_document_calls += 1
         return [
@@ -108,7 +122,10 @@ async def replay_case(case: dict[str, Any]) -> tuple[dict[str, Any], ReplayStats
             for path, content in list(documents.get(full_name, {}).items())[:max_documents]
         ]
 
-    client = SimpleNamespace(responses=ReplayResponses(intent, stats))
+    client = SimpleNamespace(
+        responses=ReplayResponses(intent, stats),
+        embeddings=ReplayEmbeddings(),
+    )
     github = SimpleNamespace(
         search_repositories=search_fixture,
         fetch_repository_documents=document_fixture,
@@ -116,7 +133,19 @@ async def replay_case(case: dict[str, Any]) -> tuple[dict[str, Any], ReplayStats
     )
     started = time.perf_counter()
     with (
-        patch.dict("os.environ", {"OPENAI_API_KEY": "offline-eval"}),
+        patch.dict(
+            "os.environ",
+            {
+                "OPENAI_API_KEY": "offline-eval",
+                "REPOSCOUT_RETRIEVAL_MODE": (
+                    "full"
+                    if pipeline == "full_document_context"
+                    else "hybrid"
+                    if pipeline == "hybrid_top_k"
+                    else "semantic"
+                ),
+            },
+        ),
         patch("src.reposcout.nodes._openai_client", return_value=client),
         patch("src.reposcout.nodes.get_github_client", return_value=github),
     ):
@@ -132,6 +161,7 @@ def evaluate(
     cases_path: Path = DEFAULT_CASES,
     input_price_per_million: float | None = None,
     output_price_per_million: float | None = None,
+    pipeline: str = "full_document_context",
 ) -> dict[str, Any]:
     dataset = json.loads(cases_path.read_text(encoding="utf-8"))
     case_results: list[dict[str, Any]] = []
@@ -146,14 +176,37 @@ def evaluate(
     total_github_calls = 0
     total_input_tokens = 0
     total_output_tokens = 0
+    candidate_recall_total = 0.0
+    inspection_recall_total = 0.0
+    inspection_ndcg_total = 0.0
+    analysis_recall_total = 0.0
 
     for case in dataset["cases"]:
-        result, stats, latency = asyncio.run(replay_case(case))
+        result, stats, latency = asyncio.run(replay_case(case, pipeline=pipeline))
         recommendations = result.get("recommendations", [])[:5]
         relevant = set(case["relevant_repositories"])
         recommended_names = {item["full_name"] for item in recommendations}
         relevant_hits += len(relevant & recommended_names)
         returned += len(recommendations)
+        discovered_names = [item["full_name"] for item in result.get("candidates", [])]
+        ranked_names = [item["full_name"] for item in result.get("ranked_candidates", [])]
+        analyzed_names = [
+            item["full_name"] for item in result.get("analysis_candidates", [])
+        ]
+        inspected_names = [
+            item["full_name"] for item in result.get("document_candidates", [])
+        ]
+        search_stages = evaluate_search_stages(
+            discovered_names,
+            ranked_names,
+            {name: 1 for name in relevant},
+            inspected_names=inspected_names,
+            analyzed_names=analyzed_names,
+        )
+        candidate_recall_total += search_stages["candidate_recall"]
+        inspection_recall_total += search_stages["recall_at_inspection_cutoff"]
+        inspection_ndcg_total += search_stages["ndcg_at_inspection_cutoff"]
+        analysis_recall_total += search_stages["recall_at_analysis_cutoff"]
 
         found_evidence: set[str] = set()
         documents = case["documents"]
@@ -183,6 +236,7 @@ def evaluate(
                 "recommended": sorted(recommended_names),
                 "precision_at_5": len(relevant & recommended_names) / max(1, len(recommendations)),
                 "evidence_recall": len(found_evidence & expected) / max(1, len(expected)),
+                "search_stages": search_stages,
                 "latency_ms": round(latency, 2),
                 "known_failure": case.get("known_failure"),
             }
@@ -198,12 +252,18 @@ def evaluate(
         )
     return {
         "dataset_version": dataset["version"],
-        "pipeline": "full_document_context",
+        "pipeline": pipeline,
         "case_count": count,
         "metrics": {
             "precision_at_5_micro": round(relevant_hits / max(1, returned), 4),
             "evidence_recall": round(evidence_hits / max(1, evidence_expected), 4),
             "citation_accuracy": round(valid_citations / max(1, citations), 4),
+            "candidate_recall_macro": round(candidate_recall_total / max(1, count), 4),
+            "recall_at_24_macro": round(inspection_recall_total / max(1, count), 4),
+            "ndcg_at_24_macro": round(inspection_ndcg_total / max(1, count), 4),
+            "recall_at_analysis_cutoff_macro": round(
+                analysis_recall_total / max(1, count), 4
+            ),
             "average_latency_ms": round(total_latency / max(1, count), 2),
             "model_calls": total_model_calls,
             "github_calls": total_github_calls,

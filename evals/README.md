@@ -20,4 +20,16 @@ When the configured provider price is known, calculate the estimate explicitly:
 
 The prices above are syntax examples, not assumed prices for `gpt-5.5`.
 
-Known failure cases are intentionally retained. Future BM25, Embedding, reranking, or query-planning changes must run against the same fixtures and report improvements and regressions.
+Known failure cases are intentionally retained. Future hybrid retrieval, reranking, or query-planning changes must run against the same fixtures and report improvements and regressions.
+
+Search-stage evaluation is implemented in `evals/search_quality.py`. It reports candidate recall before reranking, Recall@24 after the inspection cutoff, NDCG@24, repositories never discovered, and relevant repositories dropped before document inspection. This separation prevents a final recommendation metric from hiding whether a failure came from query hypotheses or the 60-to-24 reduction. Relevance accepts graded labels rather than only a single gold repository, so several valid projects and degrees of fit can be represented.
+
+Task-contract evaluation should additionally label atomic success criteria and whether each generated hard requirement was grounded in the user request. Open-ended hypothesis quality should be judged by observable candidate gain and redundancy, with a calibrated evidence-bound LLM judge used only for qualities that deterministic labels cannot express.
+
+Run the hybrid BM25 + multi-query dense + RRF + MMR variant against the same fixtures:
+
+```powershell
+.\.venv\Scripts\python.exe -m evals.run_rag
+```
+
+The command writes `rag_report.json`. The replay uses deterministic local embeddings so it remains offline; production uses the model configured by `OPENAI_EMBEDDING_MODEL`. Set `REPOSCOUT_RETRIEVAL_MODE=semantic` only for dense-only ablation.

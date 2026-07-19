@@ -112,6 +112,7 @@ def chunk_documents(
                         "commit_sha": commit_sha,
                         "url": document["url"],
                         "source_type": document.get("source_type", "documentation"),
+                        "static_signals": document.get("static_signals", ""),
                         "content": text,
                     }
                 )

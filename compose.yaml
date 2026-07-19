@@ -1,0 +1,27 @@
+services:
+  reposcout:
+    build:
+      context: .
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8000
+    ports:
+      - "${REPOSCOUT_PORT:-8000}:8000"
+    volumes:
+      - reposcout-cache:/app/.cache/repository_documents
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  reposcout-cache:

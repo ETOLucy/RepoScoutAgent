@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import hashlib
 import os
+import re
 from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import quote
@@ -12,10 +14,81 @@ import httpx
 from dotenv import load_dotenv
 
 from .documents import DocumentCache, chunk_documents, source_type_for_path
+from .static_analysis import manifest_signals
 
 load_dotenv()
 
 GITHUB_TOKEN_ENV = "GITHUB_TOKEN"
+
+_MANIFEST_NAMES = {
+    "cargo.toml",
+    "go.mod",
+    "package.json",
+    "pyproject.toml",
+    "requirements.txt",
+    "setup.cfg",
+    "setup.py",
+}
+_IMPLEMENTATION_SUFFIXES = (
+    ".c",
+    ".cpp",
+    ".cs",
+    ".go",
+    ".java",
+    ".js",
+    ".json",
+    ".jsx",
+    ".kt",
+    ".php",
+    ".py",
+    ".proto",
+    ".rb",
+    ".rs",
+    ".toml",
+    ".ts",
+    ".tsx",
+    ".yaml",
+    ".yml",
+)
+_EXCLUDED_PATH_PARTS = {
+    ".git",
+    "dist",
+    "fixtures",
+    "generated",
+    "node_modules",
+    "tests",
+    "test",
+    "vendor",
+}
+
+
+def _implementation_terms(values: list[str]) -> set[str]:
+    return {
+        token.casefold()
+        for value in values
+        for token in re.findall(r"[a-z][a-z0-9_-]{2,}", value, re.I)
+    }
+
+
+def _static_file_priority(path: str, terms: set[str]) -> tuple[int, int, str] | None:
+    normalized = path.casefold()
+    pure_path = PurePosixPath(normalized)
+    if any(part in _EXCLUDED_PATH_PARTS for part in pure_path.parts):
+        return None
+    name = pure_path.name
+    if name in _MANIFEST_NAMES or name.startswith("requirements") and name.endswith(".txt"):
+        return (0, len(path), path)
+    if not normalized.endswith(_IMPLEMENTATION_SUFFIXES):
+        return None
+    path_tokens = set(re.findall(r"[a-z][a-z0-9_-]{2,}", normalized, re.I))
+    overlap = len(terms.intersection(path_tokens))
+    structural = any(
+        marker in normalized
+        for marker in ("auth", "config", "route", "router", "schema", "service")
+    )
+    if not overlap and not structural:
+        return None
+    return (1 if overlap else 2, -overlap, path)
 
 
 class GitHubSearchError(RuntimeError):
@@ -157,6 +230,8 @@ class GitHubClient:
         default_branch: str,
         max_documents: int = 6,
         max_total_chars: int = 240_000,
+        implementation_terms: list[str] | None = None,
+        max_implementation_files: int = 10,
     ) -> list[dict[str, str]]:
         repository = quote(full_name, safe="/")
         branch = quote(default_branch, safe="")
@@ -169,7 +244,10 @@ class GitHubClient:
         if not isinstance(tree, list):
             raise GitHubSearchError("仓库文件树数据结构无效。")
         commit_sha = str(tree_payload.get("sha") or default_branch)
-        cached = self._document_cache.load(full_name, commit_sha)
+        terms = _implementation_terms(implementation_terms or [])
+        term_fingerprint = hashlib.sha256(" ".join(sorted(terms)).encode()).hexdigest()[:12]
+        cache_key = f"{commit_sha}-{term_fingerprint}"
+        cached = self._document_cache.load(full_name, cache_key)
         if cached is not None:
             return cached
         paths = [
@@ -185,8 +263,22 @@ class GitHubClient:
                 path,
             )
         )
+        static_paths = [
+            (priority, str(item.get("path")))
+            for item in tree
+            if isinstance(item, dict)
+            and item.get("type") == "blob"
+            and (
+                priority := _static_file_priority(str(item.get("path", "")), terms)
+            )
+            is not None
+        ]
+        static_paths.sort(key=lambda item: item[0])
+        selected_static_paths = [
+            path for _priority, path in static_paths[:max_implementation_files]
+        ]
 
-        async def fetch(path: str) -> dict[str, str] | None:
+        async def fetch(path: str, source_type: str | None = None) -> dict[str, str] | None:
             response = await self._request(
                 f"https://api.github.com/repos/{repository}/contents/{quote(path, safe='/')}",
                 params={"ref": default_branch},
@@ -199,12 +291,15 @@ class GitHubClient:
                 content = base64.b64decode(encoded).decode("utf-8", errors="replace")[:80_000]
             except (binascii.Error, ValueError) as exc:
                 raise GitHubSearchError("仓库文档内容无法解析。") from exc
-            return {
+            document = {
                 "path": path,
                 "url": f"https://github.com/{full_name}/blob/{commit_sha}/{path}",
-                "source_type": source_type_for_path(path),
+                "source_type": source_type or source_type_for_path(path),
                 "content": content,
             }
+            if document["source_type"] == "manifest":
+                document["static_signals"] = ", ".join(manifest_signals(path, content))
+            return document
 
         async def optional_list(
             endpoint: str, params: dict[str, str | int]
@@ -286,18 +381,34 @@ class GitHubClient:
                 )
             return activity
 
-        fetched, activity = await asyncio.gather(
+        fetched, static_files, activity = await asyncio.gather(
             asyncio.gather(*(fetch(path) for path in paths[:max_documents])),
+            asyncio.gather(
+                *(
+                    fetch(
+                        path,
+                        "manifest"
+                        if PurePosixPath(path).name.casefold() in _MANIFEST_NAMES
+                        or PurePosixPath(path).name.casefold().startswith("requirements")
+                        else "implementation",
+                    )
+                    for path in selected_static_paths
+                )
+            ),
             fetch_activity_documents(),
         )
-        documents = [item for item in fetched if item is not None] + activity
+        documents = (
+            [item for item in fetched if item is not None]
+            + [item for item in static_files if item is not None]
+            + activity
+        )
         chunks = chunk_documents(
             documents,
             repository=full_name,
             commit_sha=commit_sha,
             max_total_chars=max_total_chars,
         )
-        self._document_cache.save(full_name, commit_sha, chunks, documents)
+        self._document_cache.save(full_name, cache_key, chunks, documents)
         return chunks
 
     async def get_rate_limit(self) -> dict[str, Any]:

@@ -8,7 +8,7 @@ from src.reposcout.search import (
     parse_search_intent_with_rules,
     relax_github_query,
 )
-from src.reposcout.search.models import RequirementItem
+from src.reposcout.search.models import RequirementItem, SearchStrategy
 
 
 class SearchPlanningTest(unittest.IsolatedAsyncioTestCase):
@@ -18,6 +18,7 @@ class SearchPlanningTest(unittest.IsolatedAsyncioTestCase):
             requirements=[RequirementItem(id="face", description="支持人脸识别")],
             keywords=["self-hosted photos", "face recognition"],
         )
+
         async def parse(**_kwargs):
             return SimpleNamespace(output_parsed=expected)
 
@@ -41,13 +42,46 @@ class SearchPlanningTest(unittest.IsolatedAsyncioTestCase):
             active_within_days=180,
         )
 
-        query = compile_search_plan(intent).queries[0].query
+        plan = compile_search_plan(intent)
+        query = plan.queries[0].query
 
+        self.assertGreater(len(plan.queries), 1)
+        self.assertEqual(len({item.fingerprint for item in plan.queries}), len(plan.queries))
         self.assertIn('"self-hosted photos"', query)
         self.assertIn("language:TypeScript", query)
         self.assertIn("stars:>=50", query)
         self.assertIn("license:mit", query)
         self.assertIn("pushed:>=", query)
+
+    def test_compiler_preserves_llm_search_hypotheses(self):
+        intent = SearchIntent(
+            goal="self-host family photos",
+            keywords=["self-hosted photos"],
+            search_strategies=[
+                SearchStrategy(
+                    strategy_type="learning_reference_implementation",
+                    terms=["self hosted photo management"],
+                    rationale="Projects commonly describe the product category this way",
+                    hypothesis="Well-documented implementations expose the architecture",
+                    expected_signals=["architecture documentation"],
+                    verifies=["face"],
+                ),
+                SearchStrategy(
+                    strategy_type="alternative",
+                    terms=["Google Photos alternative", "self hosted"],
+                    rationale="Mature projects often position themselves as an alternative",
+                ),
+            ],
+        )
+
+        plan = compile_search_plan(intent)
+
+        self.assertEqual(len(plan.queries), 2)
+        self.assertEqual(plan.queries[0].strategy_type, "learning_reference_implementation")
+        self.assertEqual(plan.queries[1].strategy_type, "alternative")
+        self.assertIn('"Google Photos alternative"', plan.queries[1].query)
+        self.assertNotIn("rules_fallback", {item.strategy_type for item in plan.queries})
+        self.assertEqual(plan.queries[0].verifies, ["face"])
 
     def test_compiler_rejects_missing_keywords(self):
         with self.assertRaisesRegex(ValueError, "没有可用于"):

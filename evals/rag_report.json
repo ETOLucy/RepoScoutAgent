@@ -1,6 +1,6 @@
 {
   "dataset_version": "baseline-v1",
-  "pipeline": "full_document_context",
+  "pipeline": "hybrid_top_k",
   "case_count": 15,
   "metrics": {
     "precision_at_5_micro": 0.4828,
@@ -9,8 +9,8 @@
     "candidate_recall_macro": 1.0,
     "recall_at_24_macro": 1.0,
     "ndcg_at_24_macro": 1.0,
-    "recall_at_analysis_cutoff_macro": 1.0,
-    "average_latency_ms": 28.2,
+    "recall_at_analysis_cutoff_macro": 0.9333,
+    "average_latency_ms": 38.25,
     "model_calls": 44,
     "github_calls": 90,
     "estimated_input_tokens": 17487,
@@ -37,7 +37,7 @@
         "recall_at_analysis_cutoff": 1.0,
         "relevant_dropped_before_analysis": []
       },
-      "latency_ms": 33.98,
+      "latency_ms": 43.25,
       "known_failure": null
     },
     {
@@ -57,7 +57,7 @@
         "recall_at_analysis_cutoff": 1.0,
         "relevant_dropped_before_analysis": []
       },
-      "latency_ms": 26.68,
+      "latency_ms": 48.95,
       "known_failure": null
     },
     {
@@ -77,7 +77,7 @@
         "recall_at_analysis_cutoff": 1.0,
         "relevant_dropped_before_analysis": []
       },
-      "latency_ms": 25.13,
+      "latency_ms": 37.08,
       "known_failure": null
     },
     {
@@ -97,7 +97,7 @@
         "recall_at_analysis_cutoff": 1.0,
         "relevant_dropped_before_analysis": []
       },
-      "latency_ms": 27.63,
+      "latency_ms": 46.17,
       "known_failure": null
     },
     {
@@ -117,7 +117,7 @@
         "recall_at_analysis_cutoff": 1.0,
         "relevant_dropped_before_analysis": []
       },
-      "latency_ms": 40.01,
+      "latency_ms": 37.31,
       "known_failure": null
     },
     {
@@ -137,7 +137,7 @@
         "recall_at_analysis_cutoff": 1.0,
         "relevant_dropped_before_analysis": []
       },
-      "latency_ms": 25.52,
+      "latency_ms": 39.81,
       "known_failure": "required capability absent from documentation"
     },
     {
@@ -157,7 +157,7 @@
         "recall_at_analysis_cutoff": 1.0,
         "relevant_dropped_before_analysis": []
       },
-      "latency_ms": 28.16,
+      "latency_ms": 37.44,
       "known_failure": null
     },
     {
@@ -177,7 +177,7 @@
         "recall_at_analysis_cutoff": 1.0,
         "relevant_dropped_before_analysis": []
       },
-      "latency_ms": 28.52,
+      "latency_ms": 39.87,
       "known_failure": null
     },
     {
@@ -193,10 +193,12 @@
         "ndcg_at_inspection_cutoff": 1.0,
         "relevant_not_discovered": [],
         "relevant_dropped_before_inspection": [],
-        "recall_at_analysis_cutoff": 1.0,
-        "relevant_dropped_before_analysis": []
+        "recall_at_analysis_cutoff": 0.0,
+        "relevant_dropped_before_analysis": [
+          "demo/local-infer"
+        ]
       },
-      "latency_ms": 26.82,
+      "latency_ms": 38.53,
       "known_failure": "relevant repository has no captured documentation"
     },
     {
@@ -216,7 +218,7 @@
         "recall_at_analysis_cutoff": 1.0,
         "relevant_dropped_before_analysis": []
       },
-      "latency_ms": 23.94,
+      "latency_ms": 34.47,
       "known_failure": null
     },
     {
@@ -236,7 +238,7 @@
         "recall_at_analysis_cutoff": 1.0,
         "relevant_dropped_before_analysis": []
       },
-      "latency_ms": 29.93,
+      "latency_ms": 34.65,
       "known_failure": "semantic synonym not recognized as JWT evidence"
     },
     {
@@ -256,7 +258,7 @@
         "recall_at_analysis_cutoff": 1.0,
         "relevant_dropped_before_analysis": []
       },
-      "latency_ms": 28.81,
+      "latency_ms": 34.44,
       "known_failure": null
     },
     {
@@ -276,7 +278,7 @@
         "recall_at_analysis_cutoff": 1.0,
         "relevant_dropped_before_analysis": []
       },
-      "latency_ms": 24.22,
+      "latency_ms": 38.5,
       "known_failure": "regular expressions synonym missed"
     },
     {
@@ -296,7 +298,7 @@
         "recall_at_analysis_cutoff": 1.0,
         "relevant_dropped_before_analysis": []
       },
-      "latency_ms": 25.76,
+      "latency_ms": 30.28,
       "known_failure": null
     },
     {
@@ -316,7 +318,7 @@
         "recall_at_analysis_cutoff": 1.0,
         "relevant_dropped_before_analysis": []
       },
-      "latency_ms": 27.89,
+      "latency_ms": 32.94,
       "known_failure": "required CSV export is undocumented"
     }
   ]

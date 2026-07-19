@@ -8,11 +8,21 @@ from openai import AsyncOpenAI
 from .models import SearchIntent
 
 SEARCH_INTENT_PROMPT = (
-    "将用户想在 GitHub 寻找项目的自然语言需求转换为 SearchIntent。"
-    "requirements 保存可由仓库文档验证的原子需求，每项生成稳定短 id，并区分 required。"
-    "keywords 生成 2 到 8 个适合 GitHub repository search 的简短英文关键词，"
-    "只表达项目类别、核心能力和技术生态，不包含 stars/license/language 等 qualifier。"
-    "不得添加用户未表达的产品、功能或数值限制。只有歧义会改变搜索方向时才追问一次。"
+    "Convert the user's natural-language GitHub project request into a task contract. "
+    "Do not classify it into a fixed intent taxonomy. Infer what success means for this request. "
+    "requirements are atomic, repository-verifiable success criteria. Never add a hard requirement "
+    "the user did not express; set required=false for inferred preferences. evidence_sources names "
+    "the evidence needed, such as repository_metadata, documentation, source_code, manifest, "
+    "release_history, or citations. retrieval_terms contains 1 to 8 English evidence terms. "
+    "Generate 3 to 6 genuinely complementary search_strategies as independent hypotheses, not "
+    "fixed categories or mechanical keyword combinations. strategy_type is a short, freely chosen "
+    "label. hypothesis explains why its results could satisfy the task. terms contains 1 to 3 "
+    "English GitHub search phrases. expected_signals lists observable repository signals. verifies "
+    "references requirement ids that the hypothesis can help verify. Every hypothesis must verify "
+    "at least one criterion when criteria exist. Use known product names only when useful to this "
+    "request; never force an alternatives angle. keywords contains 2 to 8 broad fallback terms and "
+    "no GitHub qualifiers. Ask one clarification question only when ambiguity would materially "
+    "change the search direction."
 )
 
 
@@ -29,7 +39,7 @@ async def parse_search_intent_with_llm(
     )
     parsed = response.output_parsed
     if not isinstance(parsed, SearchIntent):
-        raise ValueError("LLM 未返回 SearchIntent")
+        raise ValueError("LLM did not return SearchIntent")
     return parsed
 
 

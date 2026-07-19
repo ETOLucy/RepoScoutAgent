@@ -31,11 +31,69 @@ def _qualifiers(intent: SearchIntent) -> list[str]:
 
 def compile_search_plan(intent: SearchIntent) -> SearchPlan:
     keywords = list(dict.fromkeys(item.strip() for item in intent.keywords if item.strip()))[:8]
-    if not keywords:
+    if not keywords and not intent.search_strategies:
         raise ValueError("没有可用于 GitHub 搜索的关键词")
-    query = " ".join([*(_quote(item) for item in keywords[:4]), *_qualifiers(intent)])
+    qualifiers = _qualifiers(intent)
+    strategies: list[tuple[list[str], str, str, str, list[str], list[str]]] = [
+        (
+            strategy.terms,
+            strategy.strategy_type,
+            strategy.rationale,
+            strategy.hypothesis,
+            strategy.expected_signals,
+            strategy.verifies,
+        )
+        for strategy in intent.search_strategies
+    ]
+    if not strategies:
+        term_sets: list[list[str]] = [keywords[:2]]
+        term_sets.extend([[keywords[0], keyword] for keyword in keywords[2:5]])
+        term_sets.extend([[keyword] for keyword in keywords[1:4]])
+        for requirement in intent.requirements:
+            if requirement.retrieval_terms:
+                term_sets.append([keywords[0], requirement.retrieval_terms[0]])
+        strategies = [
+            (
+                terms,
+                "rules_fallback",
+                "Deterministic query because LLM strategy is unavailable",
+                "",
+                [],
+                [],
+            )
+            for terms in term_sets
+        ]
+
+    queries: list[SearchQuery] = []
+    seen: set[str] = set()
+    for terms, strategy_type, rationale, hypothesis, expected_signals, verifies in strategies:
+        unique_terms = list(dict.fromkeys(item.strip() for item in terms if item.strip()))[:3]
+        if not unique_terms:
+            continue
+        query = " ".join([*(_quote(item) for item in unique_terms), *qualifiers])
+        fingerprint = _fingerprint(query)
+        if fingerprint in seen:
+            continue
+        seen.add(fingerprint)
+        queries.append(
+            SearchQuery(
+                query=query,
+                keywords=unique_terms,
+                fingerprint=fingerprint,
+                strategy_type=strategy_type,
+                rationale=rationale,
+                hypothesis=hypothesis,
+                expected_signals=expected_signals,
+                verifies=verifies,
+            )
+        )
+        if len(queries) == 6:
+            break
     return SearchPlan(
-        queries=[SearchQuery(query=query, keywords=keywords[:4], fingerprint=_fingerprint(query))]
+        queries=queries,
+        max_results=60,
+        max_documents_per_repository=6,
+        max_repositories_to_analyze=24,
     )
 
 

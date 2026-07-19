@@ -1,0 +1,15 @@
+.git
+.github
+.agents
+.codex
+.venv
+.cache
+__pycache__
+*.py[cod]
+.env
+.env.*
+!.env.example
+evals
+tests
+TODO.md
+*.log

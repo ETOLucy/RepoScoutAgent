@@ -17,6 +17,48 @@ def _async_client(handler: Handler) -> httpx.AsyncClient:
 
 
 class GitHubClientTest(unittest.IsolatedAsyncioTestCase):
+    async def test_fetches_only_relevant_whitelisted_static_files(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            if "/git/trees/" in request.url.path:
+                return httpx.Response(
+                    200,
+                    json={
+                        "sha": "commit-static",
+                        "tree": [
+                            {"path": "README.md", "type": "blob"},
+                            {"path": "package.json", "type": "blob"},
+                            {"path": "src/auth/saml.ts", "type": "blob"},
+                            {"path": "src/theme/colors.ts", "type": "blob"},
+                            {"path": "tests/auth/saml.test.ts", "type": "blob"},
+                            {"path": "vendor/auth/saml.ts", "type": "blob"},
+                            {"path": "assets/logo.png", "type": "blob"},
+                        ],
+                    },
+                )
+            if "/contents/" in request.url.path:
+                content = base64.b64encode(request.url.path.encode()).decode()
+                return httpx.Response(
+                    200, json={"encoding": "base64", "content": content}
+                )
+            return httpx.Response(200, json=[])
+
+        with tempfile.TemporaryDirectory() as directory:
+            async with _async_client(handler) as transport_client:
+                client = GitHubClient(transport_client, document_cache_dir=Path(directory))
+                result = await client.fetch_repository_documents(
+                    "example/repo", "main", implementation_terms=["SAML authentication"]
+                )
+
+        static = {
+            item["path"]: item["source_type"]
+            for item in result
+            if item["source_type"] in {"manifest", "implementation"}
+        }
+        self.assertEqual(
+            static,
+            {"package.json": "manifest", "src/auth/saml.ts": "implementation"},
+        )
+
     async def test_fetch_repository_documents_reads_readme_and_docs(self):
         def handler(request: httpx.Request) -> httpx.Response:
             if "/git/trees/" in request.url.path:
