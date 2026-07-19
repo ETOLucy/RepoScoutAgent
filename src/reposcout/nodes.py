@@ -195,7 +195,14 @@ async def inspect_documents(state: RepoScoutState) -> dict[str, Any]:
             )
             continue
         documents = outcome
-        if not documents:
+        has_repository_document = any(
+            item.get("source_type") in ("readme", "documentation")
+            or item.get("path", "")
+            .lower()
+            .startswith(("readme", "docs/", "doc/", "documentation/"))
+            for item in documents
+        )
+        if not documents or not has_repository_document:
             rejected.append(
                 {
                     "full_name": candidate["full_name"],
@@ -295,7 +302,7 @@ async def match_documents(state: RepoScoutState) -> dict[str, Any]:
                 "score": score,
                 "summary": assessment.summary,
                 "criteria": [item.model_dump() for item in assessment.criteria],
-                "document_paths": [item["path"] for item in documents],
+                "document_paths": list(dict.fromkeys(item["path"] for item in documents)),
                 "reasons": [f"必需需求文档匹配 {satisfied}/{len(required_ids)}"],
                 "risks": [
                     f"{item.requirement_id} 缺少文档证据"

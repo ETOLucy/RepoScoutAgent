@@ -4,12 +4,14 @@ import asyncio
 import base64
 import binascii
 import os
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 from dotenv import load_dotenv
+
+from .documents import DocumentCache, chunk_documents, source_type_for_path
 
 load_dotenv()
 
@@ -64,6 +66,7 @@ class GitHubClient:
         max_concurrency: int = 4,
         max_attempts: int = 3,
         backoff_seconds: float = 0.25,
+        document_cache_dir: Path | None = None,
     ) -> None:
         self._owns_client = client is None
         self._client = client or httpx.AsyncClient(
@@ -74,6 +77,9 @@ class GitHubClient:
         self._semaphore = asyncio.Semaphore(max_concurrency)
         self._max_attempts = max_attempts
         self._backoff_seconds = backoff_seconds
+        self._document_cache = DocumentCache(
+            document_cache_dir or Path(".cache/repository_documents")
+        )
 
     async def close(self) -> None:
         if self._owns_client:
@@ -158,9 +164,14 @@ class GitHubClient:
             f"https://api.github.com/repos/{repository}/git/trees/{branch}",
             params={"recursive": "1"},
         )
-        tree = _decode_json_response(tree_response).get("tree", [])
+        tree_payload = _decode_json_response(tree_response)
+        tree = tree_payload.get("tree", [])
         if not isinstance(tree, list):
             raise GitHubSearchError("仓库文件树数据结构无效。")
+        commit_sha = str(tree_payload.get("sha") or default_branch)
+        cached = self._document_cache.load(full_name, commit_sha)
+        if cached is not None:
+            return cached
         paths = [
             str(item.get("path"))
             for item in tree
@@ -175,7 +186,7 @@ class GitHubClient:
             )
         )
 
-        async def fetch(path: str) -> tuple[str, str] | None:
+        async def fetch(path: str) -> dict[str, str] | None:
             response = await self._request(
                 f"https://api.github.com/repos/{repository}/contents/{quote(path, safe='/')}",
                 params={"ref": default_branch},
@@ -188,27 +199,106 @@ class GitHubClient:
                 content = base64.b64decode(encoded).decode("utf-8", errors="replace")[:80_000]
             except (binascii.Error, ValueError) as exc:
                 raise GitHubSearchError("仓库文档内容无法解析。") from exc
-            return path, content
+            return {
+                "path": path,
+                "url": f"https://github.com/{full_name}/blob/{commit_sha}/{path}",
+                "source_type": source_type_for_path(path),
+                "content": content,
+            }
 
-        fetched = await asyncio.gather(*(fetch(path) for path in paths[:max_documents]))
-        documents: list[dict[str, str]] = []
-        remaining = max_total_chars
-        for item in fetched:
-            if item is None or remaining <= 0:
-                continue
-            path, content = item
-            content = content[:remaining]
-            if not content:
-                continue
-            documents.append(
-                {
-                    "path": path,
-                    "url": f"https://github.com/{full_name}/blob/{default_branch}/{path}",
-                    "content": content,
-                }
+        async def optional_list(
+            endpoint: str, params: dict[str, str | int]
+        ) -> list[dict[str, Any]]:
+            try:
+                response = await self._request(
+                    f"https://api.github.com/repos/{repository}/{endpoint}", params=params
+                )
+                payload = response.json()
+            except (GitHubSearchError, ValueError):
+                return []
+            if not isinstance(payload, list):
+                return []
+            return [item for item in payload if isinstance(item, dict)]
+
+        async def fetch_activity_documents() -> list[dict[str, str]]:
+            releases, issues, commits = await asyncio.gather(
+                optional_list("releases", {"per_page": 3}),
+                optional_list(
+                    "issues",
+                    {"state": "all", "sort": "comments", "direction": "desc", "per_page": 8},
+                ),
+                optional_list("commits", {"sha": default_branch, "per_page": 5}),
             )
-            remaining -= len(content)
-        return documents
+            activity: list[dict[str, str]] = []
+            if releases:
+                sections = [
+                    f"## {item.get('name') or item.get('tag_name') or 'Release'}\n"
+                    f"Published: {item.get('published_at') or 'unknown'}\n\n"
+                    f"{str(item.get('body') or '')[:20_000]}"
+                    for item in releases
+                ]
+                activity.append(
+                    {
+                        "path": ".github-data/releases.md",
+                        "url": f"https://github.com/{full_name}/releases",
+                        "source_type": "release",
+                        "content": "# Releases\n\n" + "\n\n".join(sections),
+                    }
+                )
+            key_issues = [item for item in issues if "pull_request" not in item][:5]
+            if key_issues:
+                sections = [
+                    f"## #{item.get('number')} {item.get('title') or 'Untitled'}\n"
+                    f"State: {item.get('state')}; comments: {item.get('comments', 0)}; "
+                    f"updated: {item.get('updated_at') or 'unknown'}\n\n"
+                    f"{str(item.get('body') or '')[:12_000]}"
+                    for item in key_issues
+                ]
+                activity.append(
+                    {
+                        "path": ".github-data/issues.md",
+                        "url": f"https://github.com/{full_name}/issues",
+                        "source_type": "issue",
+                        "content": "# Key issues\n\n" + "\n\n".join(sections),
+                    }
+                )
+            if commits:
+                sections = []
+                for item in commits:
+                    raw_detail = item.get("commit")
+                    detail: dict[str, Any] = raw_detail if isinstance(raw_detail, dict) else {}
+                    raw_author = detail.get("author")
+                    author: dict[str, Any] = raw_author if isinstance(raw_author, dict) else {}
+                    message_lines = str(detail.get("message") or "").splitlines()
+                    message = message_lines[0] if message_lines else "No commit message"
+                    sections.append(
+                        f"- `{str(item.get('sha') or '')[:12]}` "
+                        f"{message} "
+                        f"({author.get('date') or 'unknown'})"
+                    )
+                activity.append(
+                    {
+                        "path": ".github-data/commits.md",
+                        "url": f"https://github.com/{full_name}/commits/{default_branch}",
+                        "source_type": "commit",
+                        "content": "# Recent commits\n\n" + "\n".join(sections),
+                    }
+                )
+            return activity
+
+        fetched, activity = await asyncio.gather(
+            asyncio.gather(*(fetch(path) for path in paths[:max_documents])),
+            fetch_activity_documents(),
+        )
+        documents = [item for item in fetched if item is not None] + activity
+        chunks = chunk_documents(
+            documents,
+            repository=full_name,
+            commit_sha=commit_sha,
+            max_total_chars=max_total_chars,
+        )
+        self._document_cache.save(full_name, commit_sha, chunks, documents)
+        return chunks
 
     async def get_rate_limit(self) -> dict[str, Any]:
         payload = _decode_json_response(

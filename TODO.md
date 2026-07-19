@@ -34,6 +34,7 @@
 | 模型微调 | 暂缓 | Prompt、规则和 RAG 优化达到瓶颈且有审核数据 |
 | Redis/Celery/Kafka | 不计划 | 单机异步与 SQLite 无法满足真实负载时再评估 |
 | CrewAI/AutoGen 等第二框架 | 不计划 | LangGraph 已覆盖当前编排需求 |
+| GitHub CLI (`gh`) | 可选工具适配器 | 本地深度验证或执行型工作流需要复用开发者身份并操作仓库、PR、Issue、Actions 时启用 |
 
 每次引入条件技术时，PR 必须同时包含基线、实验结果和回滚路径。只完成依赖接入但没有质量或性能证据，不视为里程碑完成。
 
@@ -93,12 +94,14 @@
 
 ### 2.3 文档采集与切块
 
-- [ ] 抓取 README、docs、Release、关键 Issue 和最近 Commit
-- [ ] 按 Markdown 标题、列表和代码块边界切块，不使用固定字符硬切
-- [ ] 每个 chunk 保存仓库、文件路径、标题层级、commit SHA 和来源 URL
-- [ ] 对重复、导航、徽章和生成内容去噪
-- [ ] 限制单文件、单仓库和单任务内容预算
-- [ ] 缓存文档与 chunk，使用 commit SHA 判断是否失效
+- [x] 抓取 README、docs、Release、关键 Issue 和最近 Commit
+- [x] 按 Markdown 标题、列表和代码块边界切块，不使用固定字符硬切
+- [x] 每个 chunk 保存仓库、文件路径、标题层级、commit SHA 和来源 URL
+- [x] 对重复、导航、徽章和生成内容去噪
+- [x] 限制单文件、单仓库和单任务内容预算
+- [x] 缓存文档与 chunk，使用 commit SHA 判断是否失效
+
+文档处理位于 `src/reposcout/documents.py`：优先按 Markdown 结构形成 chunk，超大段落才执行有界拆分；相同正文按内容指纹去重。缓存位于 `.cache/repository_documents/`，同时保存原始来源和 chunk；每次先读取默认分支 Tree 的 commit SHA，SHA 变化后自然使用新的缓存项。Release、Issue 或 Commit 读取失败只缺失对应补充来源，README/docs 主证据链仍可继续。
 
 ### 2.4 BM25 RAG 基线
 
@@ -122,6 +125,20 @@
 - [ ] 识别 README 声明与仓库实现结构的明显矛盾
 - [ ] 输出 `valid / invalid / uncertain`，每个结论附原因与证据
 - [ ] 可选沙箱任务执行安装或构建，设置网络、时间和资源限制
+
+### 2.6 GitHub CLI 可选执行工具
+
+- [ ] 定义统一 `GitHubTool` 接口，使 REST API 与 `gh` CLI 返回相同的结构化结果和错误类型
+- [ ] 默认继续使用 REST API 完成候选搜索、README/docs 采集、并发控制和线上服务调用
+- [ ] 检测本机 `gh` 是否安装，并使用 `gh auth status` 判断是否可以复用开发者身份
+- [ ] 使用 `gh run`、`gh issue`、`gh pr` 和 `gh release` 深度验证候选仓库的维护状态
+- [ ] 用户选中仓库后，可选使用 `gh repo clone` 进入受限沙箱执行安装、构建和测试验证
+- [ ] 所有 CLI 调用使用参数数组、命令白名单、超时、输出大小限制和取消传播，禁止拼接执行用户输入
+- [ ] 优先使用 `--json` 获取结构化输出；记录命令、退出码、耗时和脱敏后的错误信息
+- [ ] `gh` 未安装、未登录或执行失败时明确降级到 REST API，不能影响基础搜索能力
+- [ ] 对比 REST 与 CLI 适配器的结果一致性、延迟、部署依赖和故障行为，再决定是否进入默认工作流
+
+该能力用于展示 Agent 调用本地开发工具并从“发现仓库”走向“验证仓库”，不把现有主链路改写成 `gh search` 的封装。服务端和容器部署默认不依赖 GitHub CLI。
 
 完成定义：FastAPI 异步链路可以返回部分成功结果；BM25 相比整份文档输入提高 Evidence Recall 或显著降低 Token 成本；无效仓库判断不依赖单一 Star 或更新时间字段。若 BM25 没有收益，保留全文基线并记录失败结论，不为了完成路线强行接入。
 
@@ -217,6 +234,7 @@ flowchart LR
 |---|---|---|
 | Structured Output | `SearchIntent`、证据和预算模型 | Schema 校验与降级测试 |
 | Tool Calling | GitHub Search、Tree、Contents、Release、Commit、Issue | 工具错误与重试记录 |
+| Local Tool Adapter | 可选 GitHub CLI、结构化输出、REST 降级 | `gh` 深度验证与受限执行 trace |
 | RAG | Markdown 切块、BM25；按评测决定 Embedding/rerank | 检索消融实验 |
 | Agent Planning | 根据需求覆盖缺口补充搜索 | 有界决策轨迹 |
 | LangGraph | 条件分支、`Send`、`interrupt`、checkpoint | 可恢复 Graph Demo |
@@ -236,6 +254,7 @@ flowchart LR
 -> Markdown 结构化切块
 -> BM25 Top-K RAG
 -> 仓库有效性判断
+-> 可选 GitHub CLI 深度验证
 -> checkpoint / interrupt
 -> 评估是否需要 Embedding 和 reranker
 -> 评估是否需要 Send 子 Agent 并行

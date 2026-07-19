@@ -1,7 +1,9 @@
 import asyncio
 import base64
+import tempfile
 import unittest
 from collections.abc import Callable
+from pathlib import Path
 
 import httpx
 
@@ -32,11 +34,67 @@ class GitHubClientTest(unittest.IsolatedAsyncioTestCase):
             content = base64.b64encode(path.encode()).decode()
             return httpx.Response(200, json={"encoding": "base64", "content": content})
 
-        async with _async_client(handler) as transport_client:
-            client = GitHubClient(transport_client)
-            result = await client.fetch_repository_documents("example/repo", "main")
+        with tempfile.TemporaryDirectory() as directory:
+            async with _async_client(handler) as transport_client:
+                client = GitHubClient(transport_client, document_cache_dir=Path(directory))
+                result = await client.fetch_repository_documents("example/repo", "main")
 
         self.assertEqual([item["path"] for item in result], ["README.md", "docs/setup.md"])
+
+    async def test_fetch_adds_release_issue_and_commit_sources(self):
+        calls: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(request.url.path)
+            if "/git/trees/" in request.url.path:
+                return httpx.Response(200, json={"sha": "commit-1", "tree": []})
+            if request.url.path.endswith("/releases"):
+                return httpx.Response(
+                    200,
+                    json=[{"tag_name": "v1", "published_at": "2026-01-01", "body": "Stable"}],
+                )
+            if request.url.path.endswith("/issues"):
+                return httpx.Response(
+                    200,
+                    json=[
+                        {
+                            "number": 7,
+                            "title": "Feature request",
+                            "state": "open",
+                            "comments": 4,
+                            "updated_at": "2026-01-02",
+                            "body": "Needed feature",
+                        },
+                        {"number": 8, "title": "PR", "pull_request": {}},
+                    ],
+                )
+            if request.url.path.endswith("/commits"):
+                return httpx.Response(
+                    200,
+                    json=[
+                        {
+                            "sha": "abcdef1234567890",
+                            "commit": {
+                                "message": "Fix startup",
+                                "author": {"date": "2026-01-03"},
+                            },
+                        }
+                    ],
+                )
+            raise AssertionError(f"unexpected request: {request.url}")
+
+        with tempfile.TemporaryDirectory() as directory:
+            async with _async_client(handler) as transport_client:
+                client = GitHubClient(transport_client, document_cache_dir=Path(directory))
+                result = await client.fetch_repository_documents("example/repo", "main")
+                first_call_count = len(calls)
+                cached = await client.fetch_repository_documents("example/repo", "main")
+
+        self.assertEqual(
+            {item["source_type"] for item in result}, {"release", "issue", "commit"}
+        )
+        self.assertEqual(result, cached)
+        self.assertEqual(len(calls), first_call_count + 1)
 
     async def test_search_maps_repository_and_limits_page_size(self):
         def handler(request: httpx.Request) -> httpx.Response:

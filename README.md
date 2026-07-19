@@ -6,9 +6,9 @@ RepoScoutAgent 是一个基于仓库文档证据的 GitHub 项目发现 Agent。
 
 > 找一个可以自托管家庭照片、支持人脸识别和手机自动备份、能够用 Docker 部署的开源项目。
 
-Agent 不要求用户了解 GitHub 搜索语法。它先提取可验证需求和英文关键词，再搜索候选仓库，读取 README 与 docs，最后逐项判断仓库是否满足需求。
+Agent 不要求用户了解 GitHub 搜索语法。它先提取可验证需求和英文关键词，再搜索候选仓库，读取 README、docs、Release、关键 Issue 与最近 Commit，最后逐项判断仓库是否满足需求。
 
-服务使用 FastAPI 和异步 LangGraph。GitHub Search、Tree 和 Contents 请求复用一个 `httpx.AsyncClient`，候选文档并发抓取并受 semaphore、超时、有限重试和取消传播约束；单仓库失败不会中断其他候选。
+服务使用 FastAPI 和异步 LangGraph。GitHub Search、Tree 和 Contents 请求复用一个 `httpx.AsyncClient`，候选文档并发抓取并受 semaphore、超时、有限重试和取消传播约束；单仓库失败不会中断其他候选。文档按 Markdown 标题、列表和代码块边界切块，chunk 保留来源路径、标题层级、commit SHA 与 URL，并按 commit SHA 缓存在 `.cache/repository_documents/`。
 
 ## 当前流程
 
