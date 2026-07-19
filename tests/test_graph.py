@@ -3,13 +3,13 @@ from os import environ
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+from src.reposcout.evidence import (
+    validate_evidence,
+    validate_implementation_evidence,
+)
 from src.reposcout.github_client import GitHubSearchError
 from src.reposcout.graph import build_graph
-from src.reposcout.nodes import (
-    _validate_evidence,
-    _validate_implementation_evidence,
-    match_documents,
-)
+from src.reposcout.nodes import match_documents
 from src.reposcout.search.models import (
     CriterionMatch,
     RepositoryAssessment,
@@ -172,7 +172,7 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
                 )
             ],
         )
-        result = _validate_evidence(assessment, DOCUMENTS)
+        result = validate_evidence(assessment, DOCUMENTS)
         self.assertEqual(result.criteria[0].status, "unknown")
 
     def test_wrong_commit_sha_is_downgraded_to_unknown(self):
@@ -190,7 +190,7 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
         )
         documents = [{**DOCUMENTS[0], "commit_sha": "actual-sha"}]
 
-        result = _validate_evidence(assessment, documents)
+        result = validate_evidence(assessment, documents)
 
         self.assertEqual(result.criteria[0].status, "unknown")
         self.assertIsNone(result.criteria[0].source_commit_sha)
@@ -254,7 +254,7 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
             }
         ]
 
-        result = _validate_implementation_evidence(assessment, documents)
+        result = validate_implementation_evidence(assessment, documents)
 
         self.assertEqual(result.criteria[0].implementation_status, "uncertain")
 
@@ -281,7 +281,7 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
             }
         ]
 
-        result = _validate_implementation_evidence(assessment, documents)
+        result = validate_implementation_evidence(assessment, documents)
 
         self.assertEqual(result.criteria[0].implementation_status, "implemented")
 

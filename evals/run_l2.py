@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from src.reposcout.nodes import _validate_implementation_evidence
+from src.reposcout.evidence import validate_implementation_evidence
 from src.reposcout.search.models import CriterionMatch, RepositoryAssessment
 
 ROOT = Path(__file__).resolve().parent
@@ -39,7 +39,7 @@ def evaluate(cases_path: Path = DEFAULT_CASES) -> dict[str, Any]:
                     "commit_sha": "fixture-sha",
                 }
             )
-        validated = _validate_implementation_evidence(assessment, documents)
+        validated = validate_implementation_evidence(assessment, documents)
         actual = validated.criteria[0].implementation_status
         results.append({"id": case["id"], "expected": case["expected"], "actual": actual})
 

@@ -224,7 +224,7 @@ pytest、coverage、mypy 和 Ruff 的生成缓存统一写入 `.cache/`。该目
 
 ```text
 RepoScoutAgent/
-├── src/reposcout/       # Graph、GitHub 工具和搜索领域逻辑
+├── src/reposcout/       # Graph、检索、证据判断和 GitHub 领域逻辑
 ├── tests/               # 单元、Graph、API 和评测回归测试
 ├── evals/               # 离线数据集、回放器和基线报告
 ├── static/              # Web 前端
