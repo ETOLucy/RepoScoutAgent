@@ -4,147 +4,147 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from src.reposcout.graph import build_graph
-from src.reposcout.nodes import RepositoryRequirement
+from src.reposcout.nodes import _validate_evidence
+from src.reposcout.search.models import (
+    CriterionMatch,
+    RepositoryAssessment,
+    RequirementItem,
+    SearchIntent,
+)
 
-
-SAMPLE_REPOSITORIES = [
+REPOSITORY = {
+    "full_name": "example/photo-app",
+    "url": "https://github.com/example/photo-app",
+    "description": "Self-hosted photos",
+    "language": "TypeScript",
+    "stars": 500,
+    "forks": 20,
+    "open_issues": 3,
+    "license": "MIT",
+    "topics": ["photos"],
+    "archived": False,
+    "disabled": False,
+    "fork": False,
+    "size": 100,
+    "default_branch": "main",
+    "updated_at": "2099-01-01T00:00:00Z",
+    "pushed_at": "2099-01-01T00:00:00Z",
+}
+DOCUMENTS = [
     {
-        "full_name": "example/langgraph-agent",
-        "url": "https://github.com/example/langgraph-agent",
-        "description": "A Python LangGraph agent with tool calling",
-        "language": "Python",
-        "stars": 320,
-        "forks": 40,
-        "open_issues": 3,
-        "license": "MIT",
-        "topics": ["langgraph", "agent"],
-        "archived": False,
-        "updated_at": "2099-07-01T00:00:00Z",
-        "pushed_at": "2099-07-01T00:00:00Z",
+        "path": "README.md",
+        "url": "https://github.com/example/photo-app/blob/main/README.md",
+        "content": "Private photo backup with face recognition and Docker deployment.",
     }
 ]
 
 
-class RepoScoutGraphTest(unittest.TestCase):
-    def test_invalid_requirement_stops_before_search(self):
+class GraphTest(unittest.TestCase):
+    def test_invalid_requirement_stops_early(self):
         result = build_graph().invoke({"raw_requirement": "hi"})
         self.assertIn("至少描述", result["report"])
         self.assertNotIn("query", result)
 
-    @patch("src.reposcout.nodes._openai_client")
-    @patch("src.reposcout.nodes.get_rate_limit", return_value={"core": {"limit": 5000, "remaining": 4999, "used": 1, "reset": 9999999999}, "search": {"limit": 30, "remaining": 30, "used": 0, "reset": 9999999999}})
-    @patch("src.reposcout.nodes.search_repositories", return_value=SAMPLE_REPOSITORIES)
-    @patch.dict(environ, {"OPENAI_API_KEY": "test-key"})
-    def test_search_and_rank_flow(self, _mock_search, _mock_rate_limit, mock_client):
-        mock_client.return_value.responses.parse.return_value = SimpleNamespace(
-            output_parsed=RepositoryRequirement.model_validate({
-                "language": "Python",
-                "minimum_stars": 20,
-                "active_within_days": 180,
-                "keywords": ["python", "langgraph", "agent"],
-                "licenses": ["MIT"],
-                "hard_conditions": {"language": "Python", "minimum_stars": 20, "active_within_days": 180, "licenses": ["MIT"]},
-                "soft_preferences": ["python", "langgraph", "agent"],
-                "sort_targets": ["relevance"]
-            })
-        )
-        result = build_graph().invoke(
-            {"raw_requirement": "Python LangGraph agent，至少 20 stars，近期维护"}
-        )
-        self.assertIn("language:Python", result["query"])
-        self.assertEqual(result["recommendations"][0]["full_name"], "example/langgraph-agent")
-        self.assertGreater(result["recommendations"][0]["score"], 0)
-        self.assertIn("最近半年仍有更新", result["recommendations"][0]["reasons"])
-        self.assertIn("rate_limit", result)
-        self.assertEqual(result["rate_limit"]["search"]["limit"], 30)
-        self.assertEqual(result["requirement_parser"], "llm")
-
-    @patch("src.reposcout.nodes._openai_client")
     @patch("src.reposcout.nodes.get_rate_limit", return_value={})
-    @patch("src.reposcout.nodes.search_repositories", return_value=SAMPLE_REPOSITORIES)
-    @patch.dict(environ, {"OPENAI_API_KEY": "test-key"})
-    def test_llm_requirement_parsing_with_mixed_language(
-        self, _mock_search, _mock_rate_limit, mock_client
+    @patch("src.reposcout.nodes.fetch_repository_documents", return_value=DOCUMENTS)
+    @patch("src.reposcout.nodes.search_repositories", return_value=[REPOSITORY])
+    @patch.dict(environ, {"OPENAI_API_KEY": ""})
+    def test_rule_fallback_searches_and_reads_documents(
+        self, mock_search, mock_documents, _mock_rate_limit
     ):
-        mock_client.return_value.responses.parse.return_value = SimpleNamespace(
-            output_parsed=RepositoryRequirement.model_validate({
-                "language": "Python",
-                "minimum_stars": 50,
-                "active_within_days": 180,
-                "keywords": ["python", "agent", "langgraph"],
-                "licenses": ["MIT"],
-                "hard_conditions": {},
-                "soft_preferences": ["python", "agent"],
-                "sort_targets": ["relevance"]
-            })
-        )
-        result = build_graph().invoke(
-            {"raw_requirement": "我想要一个 Python LangGraph agent，至少 50 stars，近期维护，最好 MIT 许可。"}
-        )
-        self.assertEqual(result["recommendations"][0]["full_name"], "example/langgraph-agent")
-        self.assertIn("Python", result["query"])
-        self.assertIn("stars:>=50", result["query"])
+        result = build_graph().invoke({"raw_requirement": "find Python photo backup project"})
 
+        mock_search.assert_called_once()
+        mock_documents.assert_called_once_with("example/photo-app", "main", max_documents=6)
+        self.assertEqual(result["recommendations"][0]["document_paths"], ["README.md"])
+        self.assertIn("README/docs", result["report"])
+
+    @patch("src.reposcout.nodes.get_rate_limit", return_value={})
+    @patch("src.reposcout.nodes.fetch_repository_documents", return_value=DOCUMENTS)
+    @patch("src.reposcout.nodes.search_repositories", return_value=[REPOSITORY])
     @patch("src.reposcout.nodes._openai_client")
-    @patch("src.reposcout.nodes.get_rate_limit", return_value={})
-    @patch(
-        "src.reposcout.nodes.search_repositories",
-        return_value=[
-            SAMPLE_REPOSITORIES[0],
-            {
-                **SAMPLE_REPOSITORIES[0],
-                "full_name": "example/wrong-license",
-                "license": "GPL-3.0",
-            },
-            {
-                **SAMPLE_REPOSITORIES[0],
-                "full_name": "example/stale",
-                "pushed_at": "2024-01-01T00:00:00Z",
-            },
-        ],
-    )
     @patch.dict(environ, {"OPENAI_API_KEY": "test-key"})
-    def test_hard_constraints_reject_invalid_candidates(
-        self, _mock_search, _mock_rate_limit, mock_client
+    def test_llm_matches_each_requirement_with_document_evidence(
+        self, mock_client, _mock_search, _mock_documents, _mock_rate_limit
     ):
-        mock_client.return_value.responses.parse.return_value = SimpleNamespace(
-            output_parsed=RepositoryRequirement(
-                language="Python",
-                minimum_stars=20,
-                active_within_days=180,
-                keywords=["langgraph", "agent"],
-                licenses=["MIT"],
-                hard_conditions={
-                    "language": "Python",
-                    "minimum_stars": 20,
-                    "active_within_days": 180,
-                    "licenses": ["MIT"],
-                },
-            )
+        intent = SearchIntent(
+            goal="self-host photos",
+            requirements=[
+                RequirementItem(id="face", description="支持人脸识别"),
+                RequirementItem(id="docker", description="支持 Docker 部署"),
+            ],
+            keywords=["self-hosted photos", "face recognition"],
+            minimum_stars=999,
         )
-        result = build_graph().invoke(
-            {"raw_requirement": "Python LangGraph agent，至少 20 stars，近期维护，MIT"}
+        assessment = RepositoryAssessment(
+            summary="支持照片管理和人脸识别",
+            criteria=[
+                CriterionMatch(
+                    requirement_id="face",
+                    status="satisfied",
+                    evidence="face recognition",
+                    source_path="README.md",
+                )
+            ],
         )
+        mock_client.return_value.responses.parse.side_effect = [
+            SimpleNamespace(output_parsed=intent),
+            SimpleNamespace(output_parsed=assessment),
+        ]
 
-        self.assertEqual(
-            [item["full_name"] for item in result["recommendations"]],
-            ["example/langgraph-agent"],
-        )
-        self.assertEqual(len(result["rejected_candidates"]), 2)
+        result = build_graph().invoke({"raw_requirement": "找一个支持人脸识别的照片项目"})
 
-    @patch("src.reposcout.nodes._openai_client", side_effect=RuntimeError("offline"))
+        self.assertNotIn("stars:", result["query"])
+        self.assertEqual(result["recommendations"][0]["criteria"][0]["status"], "satisfied")
+        self.assertEqual(result["recommendations"][0]["criteria"][1]["status"], "unknown")
+        self.assertGreater(result["recommendations"][0]["score"], 45)
+
     @patch("src.reposcout.nodes.get_rate_limit", return_value={})
-    @patch("src.reposcout.nodes.search_repositories", return_value=SAMPLE_REPOSITORIES)
-    @patch.dict(environ, {"OPENAI_API_KEY": "test-key"})
-    def test_llm_failure_is_visible_and_falls_back_to_rules(
-        self, _mock_search, _mock_rate_limit, _mock_client
+    @patch("src.reposcout.nodes.fetch_repository_documents", return_value=[])
+    @patch("src.reposcout.nodes.search_repositories", return_value=[REPOSITORY])
+    @patch.dict(environ, {"OPENAI_API_KEY": ""})
+    def test_repository_without_readme_or_docs_is_rejected(
+        self, _mock_search, _mock_documents, _mock_rate_limit
     ):
-        result = build_graph().invoke(
-            {"raw_requirement": "Python LangGraph agent，至少 20 stars"}
+        result = build_graph().invoke({"raw_requirement": "find photo backup project"})
+
+        self.assertEqual(result["recommendations"], [])
+        self.assertIn("README 或 docs", result["rejected_candidates"][0]["reasons"][0])
+
+    def test_unverifiable_llm_quote_is_downgraded_to_unknown(self):
+        assessment = RepositoryAssessment(
+            summary="test",
+            criteria=[
+                CriterionMatch(
+                    requirement_id="face",
+                    status="satisfied",
+                    evidence="invented quote",
+                    source_path="README.md",
+                )
+            ],
         )
 
-        self.assertEqual(result["requirement_parser"], "rules_fallback")
-        self.assertIn("RuntimeError", result["warnings"][0])
+        result = _validate_evidence(assessment, DOCUMENTS)
+
+        self.assertEqual(result.criteria[0].status, "unknown")
+        self.assertIsNone(result.criteria[0].evidence)
+
+    def test_unverifiable_violation_is_also_downgraded(self):
+        assessment = RepositoryAssessment(
+            summary="test",
+            criteria=[
+                CriterionMatch(
+                    requirement_id="docker",
+                    status="violated",
+                    evidence="Docker is unsupported",
+                    source_path="README.md",
+                )
+            ],
+        )
+
+        result = _validate_evidence(assessment, DOCUMENTS)
+
+        self.assertEqual(result.criteria[0].status, "unknown")
 
 
 if __name__ == "__main__":

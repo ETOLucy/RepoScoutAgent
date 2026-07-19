@@ -1,181 +1,125 @@
 # RepoScoutAgent
 
-RepoScoutAgent 是一个基于可追溯证据的开源项目技术选型与尽调 Agent。
+RepoScoutAgent 是一个基于仓库文档证据的 GitHub 项目发现 Agent。
 
-用户可以用自然语言描述技术需求，例如：
+用户用自然语言说明想找什么项目以及需要哪些能力，例如：
 
-> 寻找适合 Agent 开发实习学习的 Python 项目，使用 LangGraph，至少 20 stars，MIT License，最近半年仍有代码更新。
+> 找一个可以自托管家庭照片、支持人脸识别和手机自动备份、能够用 Docker 部署的开源项目。
 
-RepoScoutAgent 将需求解析为结构化约束，调用 GitHub API 搜索候选，对硬条件进行确定性过滤，并输出可解释的排序结果。后续版本会进一步从 README、Release、Commit 和 Issue 中提取可引用证据。
+Agent 不要求用户了解 GitHub 搜索语法。它先提取可验证需求和英文关键词，再搜索候选仓库，读取 README 与 docs，最后逐项判断仓库是否满足需求。
 
-> 当前处于可靠 MVP 阶段。下文会明确区分已实现能力与计划能力，完整路线见 [TODO.md](TODO.md)。
-
-## 为什么做这个项目
-
-GitHub Search 擅长关键词匹配，但真实技术选型还需要回答：
-
-- 用户的自然语言需求对应哪些准确的技术术语？
-- 候选是否违反语言、License、活跃度等硬条件？
-- README 声称的功能是否有原文证据？
-- 项目是否仍在维护，部署和二次开发风险如何？
-- 推荐结果为什么适合当前需求，而不仅仅是 Star 较高？
-
-RepoScoutAgent 的目标不是替代 GitHub，而是在 GitHub Search 之上增加需求理解、证据分析、风险判断和可解释推荐。
-
-## 当前已实现
+## 当前流程
 
 ```mermaid
 flowchart LR
-    A[自然语言需求] --> B[LLM 结构化解析]
-    B -->|失败| C[规则降级]
-    B --> D[GitHub Search]
-    C --> D
-    D --> E[硬条件过滤]
-    E --> F[可解释评分]
-    F --> G[Web / JSON 结果]
+    A[自然语言需求] --> B[LLM 需求与关键词]
+    B --> C[GitHub 仓库搜索]
+    C --> D[元数据有效性过滤]
+    D --> E[读取 README 和 docs]
+    E --> F[逐项证据匹配]
+    F --> G[可解释排序结果]
 ```
 
-- 使用 LangGraph 编排需求解析、搜索、过滤、评分和报告节点。
-- 使用 OpenAI Responses API 和 Pydantic v2 解析结构化需求。
-- 未配置 OpenAI 或解析失败时降级到规则解析，并向调用方返回警告。
-- 调用 GitHub REST API 搜索仓库并展示配额。
-- 对语言、最低 Star、License、归档状态和最近代码推送执行硬过滤。
-- 返回被拒绝候选及具体原因。
-- 按关键词匹配、社区规模和最近推送时间进行基础可解释评分。
-- 提供轻量 Web 界面、健康检查和 JSON 搜索 API。
-- 核心 Graph 测试使用 mock，不依赖真实 OpenAI 或 GitHub 请求。
+### 1. 理解需求
 
-## 尚未实现
+LLM 输出经过 Pydantic 校验的 `SearchIntent`：
 
-- README、文档、Release、Commit 和 Issue 的证据提取。
-- 多查询规划、查询改写和证据不足后的补充检索。
-- LangGraph `interrupt`、checkpoint 和任务恢复。
-- 完整离线评测集、CI、Docker 和在线部署。
+- 用户总体目标。
+- 必需和可选的原子需求。
+- 排除项。
+- 2 至 8 个适合 GitHub Repository Search 的英文关键词。
+- 用户明确提出的语言、Star、License 和活跃度限制。
 
-这些能力会按 [Roadmap](TODO.md) 逐步实现，不应被视为当前产品能力。
+关键词只表达项目类别、核心能力和技术生态。GitHub qualifier 由代码生成，LLM 不能自由编写搜索语法，也不能自行增加 Star 等硬条件。
 
-## Agent 设计
+### 2. 搜索与初筛
 
-本项目不会用多个角色 prompt 代替确定性工程逻辑。
+当前使用一条最多包含 4 个关键词的主查询，每条最多召回 20 个仓库。查询默认加入 `archived:false`；只有用户明确提出时才加入：
 
-| 问题 | 处理方式 |
-|---|---|
-| 理解自然语言需求 | LLM 结构化输出，Pydantic 校验 |
-| 选择查询和工具 | Agent 规划，有轮数和预算限制 |
-| 语言、Star、License、日期 | 确定性代码 |
-| 从文档判断功能支持 | LLM 提取，但必须引用原文 |
-| 证据是否完整 | Critic 检查，不生成新事实 |
-| 关键信息缺失或冲突 | LangGraph `interrupt` 请求用户决定 |
+- `language:`
+- `stars:>=`
+- `license:`
+- `pushed:>=`
 
-计划中的完整闭环：
+主查询返回 0 条时，系统保留 qualifier 并减少文本关键词重试一次。
 
-```mermaid
-flowchart LR
-    A[需求理解] --> B{需要澄清?}
-    B -->|是| C[interrupt]
-    B -->|否| D[多查询规划]
-    D --> E[工具调用]
-    E --> F[并行证据分析]
-    F --> G[硬条件过滤与评分]
-    G --> H[Evidence Critic]
-    H -->|证据不足且预算允许| D
-    H -->|完成| I[可追溯选型报告]
-```
+搜索后先排除明显无效候选：
+
+- 空仓库。
+- 已归档或被禁用的仓库。
+- 缺少默认分支的仓库。
+
+### 3. 读取仓库文档
+
+对前 8 个候选读取默认分支中的：
+
+- 根目录 README。
+- `docs/`、`doc/`、`documentation/` 下的 Markdown、RST 和文本文件。
+
+每个仓库最多读取 6 份文档、单文件最多 8 万字符、总计最多 24 万字符。没有可分析 README/docs 的仓库不会进入推荐，并会记录拒绝原因。
+
+### 4. 证据匹配
+
+Agent 对用户的每条需求分别输出：
+
+- `satisfied`：文档明确说明支持，并附原文和文件路径。
+- `violated`：文档明确说明不支持或冲突。
+- `unknown`：文档没有足够证据。
+
+LLM 提供的引用还会经过确定性校验。引用不在指定文件原文中时自动降级为 `unknown`，不能凭仓库名称、Star 或常识补全能力。
+
+README 和 docs 始终按不可信输入处理，其中的指令不会被执行。
+
+## 当前限制
+
+- 目前只读取仓库内 README/docs，尚未分析 Release、Commit、Issue 和源码实现。
+- 文档声称支持不等于功能一定正确，当前结论属于“文档证据匹配”。
+- 尚未执行安装、构建和运行验证。
+- LLM 不可用时只能保留显式英文词并进行基础关键词匹配，复杂中文需求需要配置模型。
+- 当前同步分析最多 8 个仓库，尚未实现并行抓取和持久化任务恢复。
 
 ## 快速启动
-
-### 1. 创建环境并安装依赖
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-### 2. 配置环境变量
-
-复制 `.env.example` 为 `.env`：
-
-```dotenv
-GITHUB_TOKEN=github_pat_xxx
-OPENAI_API_KEY=sk-xxx
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4.1-mini
-HOST=127.0.0.1
-PORT=8000
-```
-
-`GITHUB_TOKEN` 和 `OPENAI_API_KEY` 都是可选的。未配置 OpenAI Key 时使用规则解析；配置 GitHub Token 可以提高 API 限额。`.env` 已被 Git 忽略，不应提交任何密钥。
-
-### 3. 运行
-
-```powershell
+python -m pip install -r requirements-dev.txt
+Copy-Item .env.example .env
 .\.venv\Scripts\python.exe main.py
 ```
 
-访问 <http://127.0.0.1:8000>。
+Git Bash：
 
-## API
-
-健康检查：
-
-```http
-GET /api/health
+```bash
+source .venv/Scripts/activate
+./.venv/Scripts/python.exe main.py
 ```
 
-搜索：
+环境变量：
+
+```text
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-5.5
+GITHUB_TOKEN=...
+```
+
+打开 `http://127.0.0.1:8000`。搜索接口：
 
 ```http
 POST /api/search
 Content-Type: application/json
 
-{
-  "requirement": "Python LangGraph agent，至少 20 stars，近期维护，MIT License"
-}
+{"requirement":"找一个支持人脸识别和 Docker 部署的自托管照片项目"}
 ```
 
-响应中的关键字段：
-
-- `requirement`：结构化需求。
-- `requirement_parser`：`llm`、`rules` 或 `rules_fallback`。
-- `recommendations`：通过硬条件过滤的候选。
-- `rejected_candidates`：被拒绝的候选和原因。
-- `warnings`：LLM 降级等非致命问题。
-- `rate_limit`：GitHub API 配额。
-
-## 项目结构
-
-```text
-.
-├── main.py
-├── src/reposcout/
-│   ├── github_client.py
-│   ├── graph.py
-│   ├── nodes.py
-│   └── state.py
-├── static/index.html
-├── tests/test_graph.py
-├── TODO.md
-└── requirements.txt
-```
-
-## 测试
+## 质量检查
 
 ```powershell
-python -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m mypy src main.py
+.\.venv\Scripts\python.exe -m pytest
 ```
 
-当前环境需要安装 Python 和项目依赖后才能执行测试。
+测试使用 mock 响应，不依赖真实 OpenAI 或 GitHub 网络请求。CI 对 Ruff、mypy、分支覆盖率和 80% 总覆盖率门槛执行检查。
 
-## 安全与可靠性约束
-
-- Token 只从环境变量读取，日志不得包含授权头。
-- GitHub 文档是数据，不是指令。
-- 无法确认的信息标记为 `unknown`，不允许模型补全。
-- 硬条件由代码执行，不由 LLM 评分或投票决定。
-- Agent 循环必须有最大轮数、预算和终止原因。
-- 关键结论必须关联 GitHub API 或仓库文档来源。
-
-## License
-
-尚未确定。首次公开发布前会选择并添加明确的开源许可证。
+后续路线见 [TODO.md](TODO.md)。

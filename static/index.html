@@ -14,8 +14,9 @@
     .content{max-width:1160px;margin:0 auto;padding:30px}.intro{display:grid;grid-template-columns:1fr auto;align-items:end;gap:20px;margin-bottom:18px}.intro h1{font-size:25px;margin:0 0 5px}.intro p{margin:0;color:var(--muted)}
     .search{background:white;border:1px solid var(--line);padding:14px}.search textarea{border:0;outline:0;resize:none;width:100%;height:78px;padding:7px;color:var(--ink)}.actions{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #edf0ee;padding-top:10px}.hint{font-size:12px;color:#849089}.primary{border:0;background:var(--green);color:white;padding:8px 16px;border-radius:5px;font-weight:650;cursor:pointer}.primary:disabled{opacity:.55}
     .summary{display:none;margin:18px 0 10px;padding:12px 14px;border-left:3px solid var(--green);background:#fff;color:#435149}.query{font-family:Consolas,monospace;color:var(--green)}.warning{color:var(--amber);margin-top:5px}.filter-note{color:var(--muted);margin-top:5px;font-size:12px}
+    .intent{display:none;margin:14px 0 18px;background:white;border:1px solid var(--line);padding:17px}.intent-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.intent-head h2{font-size:16px;margin:0}.parser{font-size:12px;color:var(--green);background:var(--soft);padding:3px 7px;border-radius:4px}.intent-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px}.intent-row{padding:9px 0;border-top:1px solid #edf0ee;min-width:0}.intent-label{font-size:12px;color:var(--muted);margin-bottom:3px}.intent-value{color:#35433c;overflow-wrap:anywhere}.intent-list{margin:0;padding-left:18px}.intent-list li+li{margin-top:4px}.intent-wide{grid-column:1/-1}.capability{color:var(--green)}
     .results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}.card{background:white;border:1px solid var(--line);padding:17px;min-width:0}.card-head{display:flex;justify-content:space-between;gap:10px}.repo{font-size:15px;color:var(--green);font-weight:700;text-decoration:none;overflow-wrap:anywhere}.score{flex:none;font-size:12px;background:var(--soft);color:var(--green);padding:3px 7px;border-radius:4px}.desc{color:#53615a;min-height:44px;margin:10px 0}.meta{display:flex;gap:12px;color:#758179;font-size:12px;flex-wrap:wrap}.reason{margin-top:12px;padding-top:11px;border-top:1px solid #edf0ee;color:#435149}.risk{color:var(--amber);margin-top:6px}.empty{grid-column:1/-1;padding:60px;text-align:center;color:var(--muted)}
-    @media(max-width:800px){.shell{grid-template-columns:68px 1fr}aside{padding:18px}.brand span,nav,.status{display:none}.content{padding:18px}.results{grid-template-columns:1fr}}
+    @media(max-width:800px){.shell{grid-template-columns:68px 1fr}aside{padding:18px}.brand span,nav,.status{display:none}.content{padding:18px}.results,.intent-grid{grid-template-columns:1fr}.intent-wide{grid-column:auto}}
     @media(max-width:520px){.shell{display:block}aside{display:none}.top{padding:0 16px}.content{padding:14px}.intro{display:block}.intro h1{font-size:21px}.badge{display:none}}
   </style>
 </head>
@@ -35,21 +36,32 @@
         <div class="actions"><span class="hint">当前版本分析仓库元数据，README 深度分析将在下一阶段加入</span><button class="primary" id="submit">开始搜索</button></div>
       </form>
       <div class="summary" id="summary"></div>
+      <section class="intent" id="intent"></section>
       <div class="results" id="results"></div>
     </div>
   </main>
 </div>
 <script>
   const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const list=(items,render=item=>esc(item))=>items?.length?`<ul class="intent-list">${items.map(item=>`<li>${render(item)}</li>`).join("")}</ul>`:"";
+  const row=(label,value,wide=false)=>value?`<div class="intent-row${wide?" intent-wide":""}"><div class="intent-label">${esc(label)}</div><div class="intent-value">${value}</div></div>`:"";
+  const renderIntent=data=>{
+    const el=document.getElementById("intent"),value=data.search_intent||{},parser=data.requirement_parser==="llm"?"LLM 理解":data.requirement_parser==="rules_fallback"?"规则降级":"规则理解";
+    if(!Object.keys(value).length){el.style.display="none";el.innerHTML="";return}
+    const requirements=list(value.requirements,item=>`${esc(item.description)} <span class="intent-label">${item.required?"必需":"可选"}</span>`);
+    el.innerHTML=`<div class="intent-head"><h2>需求理解</h2><span class="parser">${parser}</span></div><div class="intent-grid">${row("目标",esc(value.goal),true)}${row("Agent 生成的关键词",value.keywords?.map(item=>`<span class="capability">${esc(item)}</span>`).join(" · "),true)}${row("待验证需求",requirements,true)}${row("排除项",list(value.excluded),true)}${row("需要澄清",list(data.clarification_questions),true)}</div>`;
+    el.style.display="block";
+  };
   document.getElementById("form").addEventListener("submit",async e=>{
-    e.preventDefault();const requirement=document.getElementById("requirement").value.trim(),btn=document.getElementById("submit"),summary=document.getElementById("summary"),results=document.getElementById("results");
-    btn.disabled=true;btn.textContent="Graph 执行中";summary.style.display="block";summary.textContent="正在解析需求并检索 GitHub…";results.innerHTML="";
+    e.preventDefault();const requirement=document.getElementById("requirement").value.trim(),btn=document.getElementById("submit"),summary=document.getElementById("summary"),results=document.getElementById("results"),intent=document.getElementById("intent");
+    btn.disabled=true;btn.textContent="Graph 执行中";summary.style.display="block";summary.textContent="正在解析需求并检索 GitHub…";results.innerHTML="";intent.style.display="none";intent.innerHTML="";
     try{
       const response=await fetch("/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({requirement})});
       const data=await response.json(),parser=data.requirement_parser==="llm"?"LLM":"规则";
       summary.innerHTML=`${esc(data.report)}${data.query?`<br><span class="query">${esc(data.query)}</span>`:""}<div class="filter-note">需求解析：${esc(parser)}${data.rejected_candidates?.length?` · 已排除 ${data.rejected_candidates.length} 个违反硬条件的候选`:""}</div>${data.warnings?.length?`<div class="warning">${data.warnings.map(esc).join(" · ")}</div>`:""}`;
+      renderIntent(data);
       if(!data.recommendations?.length){results.innerHTML=`<div class="empty">${esc(data.error||"没有可展示的结果")}</div>`;return}
-      results.innerHTML=data.recommendations.map(repo=>`<article class="card"><div class="card-head"><a class="repo" href="${esc(repo.url)}" target="_blank" rel="noreferrer">${esc(repo.full_name)}</a><span class="score">${esc(repo.score)} 分</span></div><div class="desc">${esc(repo.description)}</div><div class="meta"><span>★ ${repo.stars}</span><span>⑂ ${repo.forks}</span><span>${esc(repo.language||"未知语言")}</span><span>${esc(repo.license)}</span></div><div class="reason"><strong>推荐依据</strong><br>${repo.reasons.map(esc).join(" · ")}${repo.risks.length?`<div class="risk">${repo.risks.map(esc).join(" · ")}</div>`:""}</div></article>`).join("");
+      results.innerHTML=data.recommendations.map(repo=>`<article class="card"><div class="card-head"><a class="repo" href="${esc(repo.url)}" target="_blank" rel="noreferrer">${esc(repo.full_name)}</a><span class="score">${esc(repo.score)} 分</span></div><div class="desc">${esc(repo.summary||repo.description)}</div><div class="meta"><span>★ ${repo.stars}</span><span>⑂ ${repo.forks}</span><span>${esc(repo.language||"未知语言")}</span><span>${esc(repo.license)}</span></div><div class="reason"><strong>文档证据</strong>${repo.criteria?.length?`<ul class="intent-list">${repo.criteria.map(item=>`<li><strong>${esc(item.status)}</strong> · ${esc(item.requirement_id)}${item.evidence?`<br>${esc(item.evidence)} <span class="intent-label">${esc(item.source_path)}</span>`:""}</li>`).join("")}</ul>`:"<br>没有可验证需求"}${repo.risks.length?`<div class="risk">${repo.risks.map(esc).join(" · ")}</div>`:""}</div></article>`).join("");
     }catch{summary.textContent="服务请求失败，请确认应用仍在运行。"}finally{btn.disabled=false;btn.textContent="开始搜索"}
   });
 </script>
