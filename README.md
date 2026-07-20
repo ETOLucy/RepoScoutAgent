@@ -331,8 +331,8 @@ L2 静态证据门槛评测：
 
 当前固定集的 L2 Precision 为 `1.00`、`documented_only` 检出率为 `1.00`、错误 `implemented` 推断率为 `0.00`。该固定集用于校验安全门槛，不代表对公开 GitHub 仓库的泛化质量。
 
-性能优化的完整 STAR 记录、真实前后对照、简历表述和后续更新协议见
-[docs/PERFORMANCE_STAR.md](docs/PERFORMANCE_STAR.md)。该文档作为长期历史档案保留，后续优化追加或修订，不删除旧基线。
+性能优化的历史记录、真实前后对照和测量边界见
+[docs/PERFORMANCE_HISTORY.md](docs/PERFORMANCE_HISTORY.md)。该文档作为公开工程档案保留，后续优化追加或修订，不删除旧基线。
 下一阶段的性能 Milestone、建议 Issues 和质量门槛见
 [docs/PERFORMANCE_MILESTONE.md](docs/PERFORMANCE_MILESTONE.md)。
 

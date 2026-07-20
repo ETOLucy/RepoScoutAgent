@@ -3,7 +3,7 @@
 [简体中文](TODO.md) | [English](TODO.en.md)
 
 This file lists unfinished work only. See [README.en.md](README.en.md) for current capabilities,
-[docs/PERFORMANCE_STAR.en.md](docs/PERFORMANCE_STAR.en.md) for performance history, and
+[docs/PERFORMANCE_HISTORY.en.md](docs/PERFORMANCE_HISTORY.en.md) for public performance history, and
 [docs/PERFORMANCE_MILESTONE.en.md](docs/PERFORMANCE_MILESTONE.en.md) for acceptance criteria.
 
 ## Priority 1: Retrieval and Code-Understanding Evaluation

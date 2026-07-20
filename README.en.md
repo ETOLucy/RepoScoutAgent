@@ -220,4 +220,5 @@ main.py              FastAPI application and CLI
 ```
 
 See [TODO.en.md](TODO.en.md) for the roadmap, [evals/README.md](evals/README.md) for offline
-evaluation, and [docs/PERFORMANCE_STAR.en.md](docs/PERFORMANCE_STAR.en.md) for performance history.
+evaluation, and [docs/PERFORMANCE_HISTORY.en.md](docs/PERFORMANCE_HISTORY.en.md) for the public performance
+engineering history.

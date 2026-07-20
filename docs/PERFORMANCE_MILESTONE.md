@@ -42,7 +42,7 @@ results, conversation reuse, and adaptive analysis budgets.
 - TTFC、TTFV、节点耗时、外部调用数、Token 和成本可追踪。
 - `Citation Accuracy = 1.00`，`Recall@analysis >= 0.98`，L2 Precision 不低于当前固定集基线。
 - Success@5 和 NDCG@5 无统计上稳定的下降。
-- 性能结果追加到 `docs/PERFORMANCE_STAR.md`，保留全部旧基线和失败方案。
+- 性能结果追加到公开性能工程档案 `docs/PERFORMANCE_HISTORY.md`，保留全部旧基线和失败方案。
 
 ## GitHub Setup Note
 

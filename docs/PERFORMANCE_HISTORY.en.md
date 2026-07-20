@@ -1,6 +1,6 @@
-# RepoScoutAgent Performance Engineering STAR Archive
+# RepoScoutAgent Performance Engineering Archive
 
-[简体中文](PERFORMANCE_STAR.md) | [English](PERFORMANCE_STAR.en.md)
+[简体中文](PERFORMANCE_HISTORY.md) | [English](PERFORMANCE_HISTORY.en.md)
 
 This is the English companion to the long-term performance archive. Historical baselines, failed
 attempts, environment differences, and quality guardrails must remain visible; new results are
@@ -32,22 +32,22 @@ optimization as a stable benchmark.
 
 Current test counts may be higher; historical values are not rewritten.
 
-## STAR
+## Optimization Record
 
-### Situation
+### Context
 
 The service converts a natural-language request into several GitHub queries, reduces as many as 60
 repositories, reads documentation and bounded source evidence from the top 24, and performs L1 and
 L2 validation on a smaller analysis set. The original pipeline exceeded 300 seconds, and coarse UI
 progress made the delay look like a disconnected service.
 
-### Task
+### Objective
 
 Reduce end-to-end latency without weakening candidate recall, final ranking quality, L2 precision,
 or citation accuracy. Failures and fallbacks had to remain visible rather than silently presenting
 degraded output as fully model-verified.
 
-### Action
+### Changes
 
 - Added a `60 -> 24 -> 8` candidate funnel with exploration slots.
 - Replaced sequential or fixed-batch assessment with bounded stateless workers.
@@ -59,7 +59,7 @@ degraded output as fully model-verified.
 - Added phase-specific recall, NDCG, L2, and citation regressions.
 - Added per-node timing and progressive provisional/analysis-count SSE events.
 
-### Result
+### Observed Result
 
 | Version | Configuration | Observed end-to-end result |
 |---|---|---:|
@@ -152,51 +152,3 @@ default-search p50/p95. Report at least:
 
 Established, small, medium, large, and truncated-tree repositories must be separate benchmark
 groups. Deep Code explains code responsibilities; it is not an L3 build or L4 runtime probe.
-
-## Formal Benchmark Protocol
-
-Every formal comparison records or freezes:
-
-```text
-commit SHA
-dataset version and complete user request
-generated task contract and queries
-GitHub candidate responses
-repository document/code commit SHAs
-model names and provider endpoint identity
-Python version
-concurrency, timeouts, candidate and Deep Code budgets
-cold/warm cache state
-retrieval mode and fallback state
-```
-
-Run at least ten repetitions per condition and collect TTFC, TTFV, end-to-end min/p50/p95/max,
-success/timeout/fallback rates, external call counts, token/cost estimates, cache hits, concurrency,
-and 429/5xx counts.
-
-### Rollback Gates
-
-- Citation Accuracy below `1.00` blocks the change.
-- Recall@analysis below `0.98` blocks further candidate-budget reduction.
-- Strong-model timeout or deterministic-fallback rate above 20% requires investigation.
-- A stable Success@5 or NDCG@5 regression rolls back the corresponding optimization.
-- Non-equivalent environments or insufficient samples remain labelled observations.
-
-## Update Template
-
-```text
-Date / commit / change:
-Request or dataset:
-Candidate and repository snapshots:
-Models and provider mode:
-Concurrency / timeouts / candidate and Deep Code budgets:
-Cache state:
-Run count:
-TTFC / TTFV:
-End-to-end min / p50 / p95 / max:
-Calls / tokens / cost:
-Fallbacks and errors:
-Recall@analysis / Success@5 / NDCG@5 / Citation Accuracy:
-Deep Code quote accuracy / entry-point recall, when enabled:
-Decision:
-```

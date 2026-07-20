@@ -41,7 +41,8 @@ p50/p95, TTFC/TTFV, call/token/cost traces, and separate Deep Code latency repor
 - Citation Accuracy `= 1.00`, Recall@analysis `>= 0.98`, and no L2 precision regression.
 - No statistically stable Success@5 or NDCG@5 regression.
 - Deep Code quote accuracy `= 1.00` on the labelled set.
-- Results appended to `PERFORMANCE_STAR.md` without deleting historical baselines.
+- Results appended to the public performance archive `PERFORMANCE_HISTORY.md` without deleting
+  historical baselines.
 
 ## GitHub Setup Note
 
