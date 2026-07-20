@@ -5,3 +5,4 @@ __pycache__/
 .cache/*
 !.cache/.gitkeep
 .DS_Store
+docs/RESUME.md

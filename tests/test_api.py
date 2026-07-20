@@ -28,6 +28,18 @@ class ApiTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
 
+    async def test_frontend_explains_deep_code_mode(self):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("什么时候开启 Deep Code", response.text)
+        self.assertIn("不执行候选代码", response.text)
+        self.assertIn("新任务", response.text)
+        self.assertIn("证据矩阵", response.text)
+
     async def test_json_search_uses_async_graph(self):
         graph = AsyncMock()
         graph.ainvoke.return_value = {"report": "done", "query": "agent archived:false"}
