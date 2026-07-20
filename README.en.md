@@ -103,9 +103,22 @@ SearXNG URL are command-line options rather than environment variables.
 
 ```powershell
 Copy-Item .env.example .env
-docker compose up --build -d
-docker compose ps
+.\.venv\Scripts\python.exe docker_cli.py up --build
+.\.venv\Scripts\python.exe docker_cli.py status
 ```
+
+No proxy is required when Docker Hub is directly reachable. If a pull fails with
+`failed to fetch oauth token`, poisoned DNS, or a connection timeout, apply a proxy only to that
+command instead of storing a machine-local port in `.env`:
+
+```powershell
+.\.venv\Scripts\python.exe docker_cli.py up --build --proxy http://127.0.0.1:7897
+.\.venv\Scripts\python.exe docker_cli.py --help
+```
+
+The option temporarily supplies `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` to Docker CLI and
+BuildKit. It does not modify the current shell, system environment, or project `.env`. Native
+`docker compose` commands remain supported.
 
 Compose starts RepoScout and an internal SearXNG service. No paid web-search key is required. If
 SearXNG is not configured for a direct process launch, RepoScout continues with GitHub-only
