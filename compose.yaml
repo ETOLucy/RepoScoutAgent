@@ -4,6 +4,18 @@ services:
       context: .
     env_file:
       - .env
+    command:
+      - python
+      - main.py
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --searxng-url
+      - http://searxng:8080
+    depends_on:
+      searxng:
+        condition: service_healthy
     ports:
       - "8000:8000"
     volumes:
@@ -19,6 +31,23 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 3
+
+  searxng:
+    image: searxng/searxng:latest
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -q
+        - --spider
+        - http://127.0.0.1:8080/healthz
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
 
 volumes:
   reposcout-cache:

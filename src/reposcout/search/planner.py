@@ -18,7 +18,9 @@ SEARCH_INTENT_PROMPT = (
     "fixed categories or mechanical keyword combinations. strategy_type is a short, freely chosen "
     "label. hypothesis explains why its results could satisfy the task. terms contains 1 to 3 "
     "English GitHub search phrases. expected_signals lists observable repository signals. verifies "
-    "references requirement ids that the hypothesis can help verify. Every hypothesis must verify "
+    "references requirement ids that the hypothesis can help verify. Treat a project named only "
+    "as a similarity reference as context, never as a search term; search for its product category "
+    "and capabilities instead. Every hypothesis must verify "
     "at least one criterion when criteria exist. Use known product names only when useful to this "
     "request; never force an alternatives angle. keywords contains 2 to 8 broad fallback terms and "
     "component_roles describes independently discoverable companion roles only when a "
@@ -44,11 +46,15 @@ async def parse_search_intent_with_llm(
     parsed = response.output_parsed
     if not isinstance(parsed, SearchIntent):
         raise ValueError("LLM did not return SearchIntent")
-    return parsed
+    return remove_reference_project_names(parsed, raw)
 
 
 _FALLBACK_CONCEPTS = (
-    (r"(?:发现|寻找|推荐).{0,12}(?:仓库|repo)|repository discovery", "repository discovery"),
+    (
+        r"(?:发现|寻找|推荐).{0,12}(?:仓库|repo)|"
+        r"(?:仓库|repo).{0,8}(?:推荐|发现)|repository discovery",
+        "repository discovery",
+    ),
     (r"自然语言|natural language", "natural language search"),
     (r"开源软件|open.?source software", "open source software discovery"),
     (r"多源|multi.?source", "multi source search"),
@@ -61,6 +67,40 @@ _FALLBACK_CONCEPTS = (
     (r"人脸识别|face recognition", "face recognition"),
     (r"自动备份|automatic backup", "automatic backup"),
 )
+
+
+def _reference_project_names(raw: str) -> set[str]:
+    patterns = (
+        r"(?:与|和)\s*([A-Za-z][A-Za-z0-9_.-]{1,60})\s*(?:类似|同类)",
+        r"(?:similar\s+to|like)\s+([A-Za-z][A-Za-z0-9_.-]{1,60})",
+    )
+    return {
+        match.group(1).casefold()
+        for pattern in patterns
+        for match in re.finditer(pattern, raw, re.I)
+    }
+
+
+def remove_reference_project_names(intent: SearchIntent, raw: str) -> SearchIntent:
+    references = _reference_project_names(raw)
+    if not references:
+        return intent
+
+    def is_reference_term(term: str) -> bool:
+        tokens = set(re.findall(r"[a-zA-Z][a-zA-Z0-9_.-]*", term.casefold()))
+        return bool(tokens) and tokens <= references | {"alternative", "alternatives"}
+
+    intent.keywords = [
+        term for term in intent.keywords if not is_reference_term(term)
+    ]
+    for strategy in intent.search_strategies:
+        strategy.terms = [
+            term for term in strategy.terms if not is_reference_term(term)
+        ]
+    intent.search_strategies = [
+        strategy for strategy in intent.search_strategies if strategy.terms
+    ]
+    return intent
 
 
 def parse_search_intent_with_rules(raw: str) -> SearchIntent:
@@ -80,6 +120,7 @@ def parse_search_intent_with_rules(raw: str) -> SearchIntent:
         "repository",
         "project",
         "reposcout",
+        "reposcoutagent",
         "tool",
     }
     keywords = list(
@@ -94,8 +135,9 @@ def parse_search_intent_with_rules(raw: str) -> SearchIntent:
         )
         for index, concept in enumerate(concepts[1:], start=1)
     ][:8]
-    return SearchIntent(
+    intent = SearchIntent(
         goal=raw.strip(),
         requirements=requirements,
         keywords=keywords,
     )
+    return remove_reference_project_names(intent, raw)

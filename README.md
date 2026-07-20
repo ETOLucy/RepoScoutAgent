@@ -166,7 +166,10 @@ docker compose up --build -d
 docker compose ps
 ```
 
-打开 `http://127.0.0.1:8000`。容器以非 root 用户运行，`/api/health` 用于健康检查，文档缓存保存在 `reposcout-cache` 卷中。
+打开 `http://127.0.0.1:8000`。Compose 会同时启动只在容器网络内可见的 SearXNG，
+因此网页召回不要求付费 API Key。配置 `BRAVE_SEARCH_API_KEY` 后，Brave 会与 SearXNG
+并行召回并去重；不配置时只使用 SearXNG + GitHub。容器以非 root 用户运行，
+`/api/health` 用于健康检查，文档缓存保存在 `reposcout-cache` 卷中。
 
 研究任务接口：
 
@@ -209,6 +212,9 @@ REPOSCOUT_RETRIEVAL_MODE=hybrid
 网页召回的查询数、单次结果数和总时间预算分别由 `--web-search-max-queries`、
 `--web-search-results` 和 `--web-search-timeout` 控制。默认只并行执行 2 条网页查询，
 网页分支最多占用 4 秒；超时或 API 失败时立即保留 GitHub 原生结果继续执行。
+`--searxng-url http://127.0.0.1:8080` 可连接独立运行的 SearXNG；这是首选的免费
+provider。配置 `BRAVE_SEARCH_API_KEY` 后 Brave 作为并行补充。两者都未配置时自动保持
+GitHub-only，不影响仓库原生搜索。
 任务契约的 LLM 解析预算由 `--requirement-timeout` 控制，默认 15 秒；超时后使用
 中英领域短语和显式英文词的确定性解析继续搜索，并在结果中标明降级。
 

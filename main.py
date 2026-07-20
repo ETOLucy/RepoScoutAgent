@@ -22,7 +22,13 @@ from src.reposcout.conversations import ConversationStore
 from src.reposcout.github_client import GitHubClient, set_github_client
 from src.reposcout.nodes import set_requirement_timeout
 from src.reposcout.research import ResearchStore
-from src.reposcout.web_search import BraveWebSearchClient, set_web_search_client
+from src.reposcout.web_search import (
+    BraveWebSearchClient,
+    CompositeWebSearchProvider,
+    SearXNGSearchProvider,
+    WebSearchProvider,
+    set_web_search_client,
+)
 
 load_dotenv()
 
@@ -43,6 +49,7 @@ class ServerConfig:
     web_search_results: int = 8
     web_search_timeout: float = 4.0
     requirement_timeout: float = 15.0
+    searxng_url: str | None = None
 
 
 def _positive_int(value: str) -> int:
@@ -113,6 +120,10 @@ def create_parser() -> argparse.ArgumentParser:
         type=_positive_float,
         default=15.0,
         help="LLM requirement parsing time budget in seconds (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--searxng-url",
+        help="SearXNG base URL; enables the preferred free web search provider",
     )
     return parser
 
@@ -193,17 +204,27 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         max_attempts=config.github_max_attempts,
     )
     set_github_client(client)
+    providers: list[WebSearchProvider] = []
+    if config.searxng_url:
+        providers.append(
+            SearXNGSearchProvider(
+                config.searxng_url,
+                timeout_seconds=config.web_search_timeout,
+                max_queries=config.web_search_max_queries,
+                results_per_query=config.web_search_results,
+            )
+        )
     brave_key = os.getenv("BRAVE_SEARCH_API_KEY")
-    web_client = (
-        BraveWebSearchClient(
+    if brave_key:
+        providers.append(
+            BraveWebSearchClient(
             brave_key,
             timeout_seconds=config.web_search_timeout,
             max_queries=config.web_search_max_queries,
             results_per_query=config.web_search_results,
         )
-        if brave_key
-        else None
-    )
+        )
+    web_client = CompositeWebSearchProvider(providers) if providers else None
     set_web_search_client(web_client)
     try:
         yield

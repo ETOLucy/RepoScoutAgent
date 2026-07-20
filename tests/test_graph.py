@@ -127,6 +127,7 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
                         url="https://github.com/example/photo-app",
                         description="Web result",
                         query="photo backup",
+                        providers=("brave",),
                     )
                 ]
             )

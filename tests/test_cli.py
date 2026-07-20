@@ -26,6 +26,8 @@ class CliTest(unittest.TestCase):
                 "2.5",
                 "--requirement-timeout",
                 "12",
+                "--searxng-url",
+                "http://127.0.0.1:8888",
             ]
         )
 
@@ -37,6 +39,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(config.web_search_results, 10)
         self.assertEqual(config.web_search_timeout, 2.5)
         self.assertEqual(config.requirement_timeout, 12)
+        self.assertEqual(config.searxng_url, "http://127.0.0.1:8888")
 
     def test_help_lists_runtime_options(self):
         help_text = create_parser().format_help()
@@ -45,6 +48,7 @@ class CliTest(unittest.TestCase):
         self.assertIn("--github-max-concurrency", help_text)
         self.assertIn("--web-search-timeout", help_text)
         self.assertIn("--requirement-timeout", help_text)
+        self.assertIn("--searxng-url", help_text)
 
     def test_rejects_invalid_values(self):
         with self.assertRaises(SystemExit):

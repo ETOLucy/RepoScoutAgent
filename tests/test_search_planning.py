@@ -7,6 +7,7 @@ from src.reposcout.search import (
     parse_search_intent_with_llm,
     parse_search_intent_with_rules,
     relax_github_query,
+    remove_reference_project_names,
 )
 from src.reposcout.search.models import ComponentRole, RequirementItem, SearchStrategy
 
@@ -42,6 +43,39 @@ class SearchPlanningTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("multi source search", intent.keywords)
         self.assertIn("verifiable citations", intent.keywords)
         self.assertGreaterEqual(len(intent.requirements), 3)
+
+    def test_similarity_reference_name_is_not_a_search_term(self):
+        intent = SearchIntent(
+            goal="find a repository recommendation tool",
+            keywords=["RepoScout", "repository discovery"],
+            search_strategies=[
+                SearchStrategy(
+                    strategy_type="category",
+                    terms=["RepoScout alternatives", "GitHub repository recommendation"],
+                    rationale="Find products in the same category",
+                )
+            ],
+        )
+
+        cleaned = remove_reference_project_names(
+            intent, "寻找与 RepoScout 类似的 GitHub repo 推荐项目"
+        )
+        plan = compile_search_plan(cleaned)
+
+        self.assertEqual(cleaned.keywords, ["repository discovery"])
+        self.assertEqual(
+            cleaned.search_strategies[0].terms,
+            ["GitHub repository recommendation"],
+        )
+        self.assertNotIn("reposcout", " ".join(item.query for item in plan.queries).lower())
+
+    def test_rule_fallback_uses_category_not_reference_name(self):
+        intent = parse_search_intent_with_rules(
+            "寻找与 RepoScout 类似的 GitHub repo 推荐项目"
+        )
+
+        self.assertEqual(intent.keywords[0], "repository discovery")
+        self.assertNotIn("reposcout", intent.keywords)
 
     def test_compiler_uses_keywords_and_explicit_qualifiers(self):
         intent = SearchIntent(

@@ -286,14 +286,17 @@ async def search_github(state: RepoScoutState) -> dict[str, Any]:
                         [web_component_role] if web_component_role else []
                     ),
                     "best_query_rank": len(queries) + 1,
-                    "sources": ["brave_web_search"],
+                    "sources": [f"{name}_web_search" for name in hit.providers]
+                    or ["web_search"],
                     "web_hits": [],
                 },
             },
         )
         sources = stored["discovery"].setdefault("sources", ["github_search"])
-        if "brave_web_search" not in sources:
-            sources.append("brave_web_search")
+        hit_sources = [f"{name}_web_search" for name in hit.providers] or ["web_search"]
+        for source in hit_sources:
+            if source not in sources:
+                sources.append(source)
         component_roles = stored["discovery"].setdefault("component_roles", [])
         if web_component_role and web_component_role not in component_roles:
             component_roles.append(web_component_role)
@@ -303,6 +306,7 @@ async def search_github(state: RepoScoutState) -> dict[str, Any]:
                 "url": hit.url,
                 "description": hit.description,
                 "query": hit.query,
+                "providers": list(hit.providers),
             }
         )
     if failures == len(queries) and not candidates_by_name:
