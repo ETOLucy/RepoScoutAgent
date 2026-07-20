@@ -12,7 +12,7 @@
     "recall_at_analysis_cutoff_macro": 1.0,
     "average_latency_ms": 28.2,
     "model_calls": 44,
-    "github_calls": 90,
+    "github_calls": 107,
     "estimated_input_tokens": 17487,
     "estimated_output_tokens": 3842,
     "estimated_cost_usd": null,

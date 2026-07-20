@@ -34,7 +34,9 @@ def compile_search_plan(intent: SearchIntent) -> SearchPlan:
     if not keywords and not intent.search_strategies:
         raise ValueError("没有可用于 GitHub 搜索的关键词")
     qualifiers = _qualifiers(intent)
-    strategies: list[tuple[list[str], str, str, str, list[str], list[str]]] = [
+    generated_strategies: list[
+        tuple[list[str], str, str, str, list[str], list[str]]
+    ] = [
         (
             strategy.terms,
             strategy.strategy_type,
@@ -45,27 +47,62 @@ def compile_search_plan(intent: SearchIntent) -> SearchPlan:
         )
         for strategy in intent.search_strategies
     ]
-    if not strategies:
+    anchor = keywords[0] if keywords else generated_strategies[0][0][0]
+    strategies: list[tuple[list[str], str, str, str, list[str], list[str]]] = [
+        (
+            [anchor],
+            "broad_recall",
+            "Broad category query prevents optional capability wording from blocking discovery",
+            "Relevant projects may describe the product category without listing every capability",
+            ["repository belongs to the requested product category"],
+            [],
+        )
+    ]
+    for requirement in intent.requirements[:3]:
+        terms = list(
+            dict.fromkeys(
+                item.strip()
+                for item in requirement.retrieval_terms
+                if item.strip() and item.casefold() != anchor.casefold()
+            )
+        )
+        if terms:
+            strategies.append(
+                (
+                    [anchor, terms[0]],
+                    "requirement_facet",
+                    "Recall one capability at a time instead of requiring every capability",
+                    f"Projects matching this facet may be useful full or near matches: "
+                    f"{requirement.description}",
+                    terms[:1],
+                    [requirement.id],
+                )
+            )
+    strategies.extend(generated_strategies)
+    if not generated_strategies:
         term_sets: list[list[str]] = [keywords[:2]]
         term_sets.extend([[keywords[0], keyword] for keyword in keywords[2:5]])
         term_sets.extend([[keyword] for keyword in keywords[1:4]])
         for requirement in intent.requirements:
             if requirement.retrieval_terms:
                 term_sets.append([keywords[0], requirement.retrieval_terms[0]])
-        strategies = [
-            (
-                terms,
-                "rules_fallback",
-                "Deterministic query because LLM strategy is unavailable",
-                "",
-                [],
-                [],
-            )
-            for terms in term_sets
-        ]
+        strategies.extend(
+            [
+                (
+                    terms,
+                    "rules_fallback",
+                    "Deterministic query because LLM strategy is unavailable",
+                    "",
+                    [],
+                    [],
+                )
+                for terms in term_sets
+            ]
+        )
 
     queries: list[SearchQuery] = []
     seen: set[str] = set()
+    base_budget = max(3, 8 - len(intent.component_roles))
     for terms, strategy_type, rationale, hypothesis, expected_signals, verifies in strategies:
         unique_terms = list(dict.fromkeys(item.strip() for item in terms if item.strip()))[:3]
         if not unique_terms:
@@ -87,7 +124,33 @@ def compile_search_plan(intent: SearchIntent) -> SearchPlan:
                 verifies=verifies,
             )
         )
-        if len(queries) == 6:
+        if len(queries) == base_budget:
+            break
+    for role in intent.component_roles:
+        unique_terms = list(
+            dict.fromkeys(item.strip() for item in role.search_terms if item.strip())
+        )[:2]
+        if not unique_terms:
+            continue
+        query = " ".join([*(_quote(item) for item in unique_terms), "archived:false"])
+        fingerprint = _fingerprint(query)
+        if fingerprint in seen:
+            continue
+        seen.add(fingerprint)
+        queries.append(
+            SearchQuery(
+                query=query,
+                keywords=unique_terms,
+                fingerprint=fingerprint,
+                strategy_type="component_role",
+                rationale=role.purpose,
+                hypothesis=f"An independent {role.role} component can complete the solution",
+                expected_signals=role.compatibility_interfaces,
+                verifies=role.fulfills,
+                component_role=role.role,
+            )
+        )
+        if len(queries) == 8:
             break
     return SearchPlan(
         queries=queries,
@@ -100,6 +163,8 @@ def compile_search_plan(intent: SearchIntent) -> SearchPlan:
 def relax_github_query(query: str) -> str | None:
     parts = re.findall(r'"[^"]+"|\S+', query)
     qualifiers = [item for item in parts if ":" in item and not item.startswith('"')]
-    text = [item.strip('"').split()[0] for item in parts if item not in qualifiers]
-    relaxed = " ".join([*text[:2], *qualifiers])
+    text = [item for item in parts if item not in qualifiers]
+    if len(text) <= 1:
+        return None
+    relaxed = " ".join([text[0], *qualifiers])
     return relaxed if relaxed.lower() != query.lower() else None

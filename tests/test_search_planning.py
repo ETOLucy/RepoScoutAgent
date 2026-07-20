@@ -8,7 +8,7 @@ from src.reposcout.search import (
     parse_search_intent_with_rules,
     relax_github_query,
 )
-from src.reposcout.search.models import RequirementItem, SearchStrategy
+from src.reposcout.search.models import ComponentRole, RequirementItem, SearchStrategy
 
 
 class SearchPlanningTest(unittest.IsolatedAsyncioTestCase):
@@ -31,6 +31,17 @@ class SearchPlanningTest(unittest.IsolatedAsyncioTestCase):
     def test_rule_fallback_keeps_explicit_english_terms(self):
         intent = parse_search_intent_with_rules("找一个 Python LangGraph RAG 项目")
         self.assertEqual(intent.keywords, ["python", "langgraph", "rag"])
+
+    def test_rule_fallback_translates_chinese_research_concepts(self):
+        intent = parse_search_intent_with_rules(
+            "根据自然语言发现 GitHub 仓库，支持多源搜索、项目比较和可验证引用"
+        )
+
+        self.assertEqual(intent.keywords[0], "repository discovery")
+        self.assertIn("natural language search", intent.keywords)
+        self.assertIn("multi source search", intent.keywords)
+        self.assertIn("verifiable citations", intent.keywords)
+        self.assertGreaterEqual(len(intent.requirements), 3)
 
     def test_compiler_uses_keywords_and_explicit_qualifiers(self):
         intent = SearchIntent(
@@ -76,12 +87,46 @@ class SearchPlanningTest(unittest.IsolatedAsyncioTestCase):
 
         plan = compile_search_plan(intent)
 
-        self.assertEqual(len(plan.queries), 2)
-        self.assertEqual(plan.queries[0].strategy_type, "learning_reference_implementation")
-        self.assertEqual(plan.queries[1].strategy_type, "alternative")
-        self.assertIn('"Google Photos alternative"', plan.queries[1].query)
+        hypotheses = {
+            item.strategy_type: item for item in plan.queries
+        }
+        self.assertIn("broad_recall", hypotheses)
+        self.assertIn("learning_reference_implementation", hypotheses)
+        self.assertIn("alternative", hypotheses)
+        self.assertIn('"Google Photos alternative"', hypotheses["alternative"].query)
         self.assertNotIn("rules_fallback", {item.strategy_type for item in plan.queries})
-        self.assertEqual(plan.queries[0].verifies, ["face"])
+        self.assertEqual(hypotheses["learning_reference_implementation"].verifies, ["face"])
+
+    def test_compiler_does_not_require_every_capability_during_discovery(self):
+        intent = SearchIntent(
+            goal="self-hosted family photos",
+            requirements=[
+                RequirementItem(
+                    id="face",
+                    description="face recognition",
+                    retrieval_terms=["face recognition"],
+                ),
+                RequirementItem(
+                    id="mobile",
+                    description="mobile auto backup",
+                    retrieval_terms=["mobile backup"],
+                ),
+                RequirementItem(
+                    id="docker",
+                    description="Docker deployment",
+                    retrieval_terms=["Docker"],
+                ),
+            ],
+            keywords=["self-hosted photos", "face recognition", "mobile backup", "Docker"],
+        )
+
+        plan = compile_search_plan(intent)
+
+        broad = next(item for item in plan.queries if item.strategy_type == "broad_recall")
+        facets = [item for item in plan.queries if item.strategy_type == "requirement_facet"]
+        self.assertEqual(broad.keywords, ["self-hosted photos"])
+        self.assertEqual(len(facets), 3)
+        self.assertFalse(all("Docker" in item.query for item in plan.queries))
 
     def test_compiler_rejects_missing_keywords(self):
         with self.assertRaisesRegex(ValueError, "没有可用于"):
@@ -91,8 +136,31 @@ class SearchPlanningTest(unittest.IsolatedAsyncioTestCase):
         query = '"self-hosted photos" "face recognition" docker archived:false stars:>=20'
         self.assertEqual(
             relax_github_query(query),
-            "self-hosted face archived:false stars:>=20",
+            '"self-hosted photos" archived:false stars:>=20',
         )
+
+    def test_component_roles_receive_independent_query_budget(self):
+        intent = SearchIntent(
+            goal="photos",
+            keywords=["self-hosted photos"],
+            component_roles=[
+                ComponentRole(
+                    role="object_storage",
+                    purpose="store originals",
+                    search_terms=["S3 object storage"],
+                    compatibility_interfaces=["s3"],
+                    fulfills=["storage"],
+                )
+            ],
+        )
+
+        plan = compile_search_plan(intent)
+        component_query = next(
+            item for item in plan.queries if item.component_role == "object_storage"
+        )
+
+        self.assertEqual(component_query.strategy_type, "component_role")
+        self.assertNotIn("language:", component_query.query)
 
 
 if __name__ == "__main__":

@@ -36,12 +36,19 @@ class ApiTest(unittest.IsolatedAsyncioTestCase):
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
             ) as client:
                 response = await client.post("/api/search", json={"requirement": "find an agent"})
+                restored = await client.get(
+                    f"/api/research/{response.json()['research_id']}"
+                )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["report"], "done")
         self.assertTrue(response.json()["conversation_id"])
+        self.assertTrue(response.json()["research_id"])
         self.assertEqual(response.json()["turn"], 1)
         graph.ainvoke.assert_awaited_once()
+
+        self.assertEqual(restored.status_code, 200)
+        self.assertEqual(restored.json()["report"], "done")
 
     async def test_sse_stream_exposes_progress_and_result(self):
         graph = StreamingGraph()
@@ -80,6 +87,27 @@ class ApiTest(unittest.IsolatedAsyncioTestCase):
         second_state = graph.ainvoke.await_args_list[1].args[0]
         self.assertIn("find Python RAG", second_state["raw_requirement"])
         self.assertIn("Rust instead", second_state["raw_requirement"])
+
+    async def test_standalone_follow_up_replaces_previous_topic(self):
+        graph = AsyncMock()
+        graph.ainvoke.return_value = {"report": "done"}
+        with patch("main.GRAPH", graph):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                first = await client.post(
+                    "/api/search", json={"requirement": "想找自托管照片项目"}
+                )
+                await client.post(
+                    "/api/search",
+                    json={
+                        "requirement": "想找一个 GitHub repo 推荐项目，尽量可以实操",
+                        "conversation_id": first.json()["conversation_id"],
+                    },
+                )
+
+        second_state = graph.ainvoke.await_args_list[1].args[0]
+        self.assertNotIn("照片", second_state["raw_requirement"])
 
 
 if __name__ == "__main__":

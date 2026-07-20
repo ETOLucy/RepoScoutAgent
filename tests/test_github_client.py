@@ -271,6 +271,33 @@ class GitHubClientTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(calls, 1)
 
+    async def test_rate_limit_uses_response_headers_without_extra_request(self):
+        calls = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            return httpx.Response(
+                200,
+                json={"items": []},
+                headers={
+                    "X-RateLimit-Resource": "search",
+                    "X-RateLimit-Limit": "30",
+                    "X-RateLimit-Remaining": "28",
+                    "X-RateLimit-Used": "2",
+                    "X-RateLimit-Reset": "123456",
+                },
+                request=request,
+            )
+
+        async with _async_client(handler) as transport_client:
+            client = GitHubClient(transport_client)
+            await client.search_repositories("agent")
+            rate_limit = await client.get_rate_limit()
+
+        self.assertEqual(calls, 1)
+        self.assertEqual(rate_limit["search"]["remaining"], 28)
+
 
 if __name__ == "__main__":
     unittest.main()

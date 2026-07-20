@@ -5,7 +5,7 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
-from .models import SearchIntent
+from .models import RequirementItem, SearchIntent
 
 SEARCH_INTENT_PROMPT = (
     "Convert the user's natural-language GitHub project request into a task contract. "
@@ -21,6 +21,10 @@ SEARCH_INTENT_PROMPT = (
     "references requirement ids that the hypothesis can help verify. Every hypothesis must verify "
     "at least one criterion when criteria exist. Use known product names only when useful to this "
     "request; never force an alternatives angle. keywords contains 2 to 8 broad fallback terms and "
+    "component_roles describes independently discoverable companion roles only when a "
+    "multi-component solution is useful, such as mobile_sync, object_storage, or reverse_proxy. "
+    "Each role includes "
+    "search_terms, compatibility_interfaces, and the requirement ids it fulfills. "
     "no GitHub qualifiers. Ask one clarification question only when ambiguity would materially "
     "change the search direction."
 )
@@ -43,8 +47,55 @@ async def parse_search_intent_with_llm(
     return parsed
 
 
+_FALLBACK_CONCEPTS = (
+    (r"(?:发现|寻找|推荐).{0,12}(?:仓库|repo)|repository discovery", "repository discovery"),
+    (r"自然语言|natural language", "natural language search"),
+    (r"开源软件|open.?source software", "open source software discovery"),
+    (r"多源|multi.?source", "multi source search"),
+    (r"项目比较|方案比较|project comparison", "project comparison"),
+    (r"可验证引用|证据|verifiable citation|citation", "verifiable citations"),
+    (r"研究报告|research report", "research report"),
+    (r"本地部署|自托管|self.?host", "self hosted"),
+    (r"docker|容器", "docker"),
+    (r"照片|相册|photo", "photo management"),
+    (r"人脸识别|face recognition", "face recognition"),
+    (r"自动备份|automatic backup", "automatic backup"),
+)
+
+
 def parse_search_intent_with_rules(raw: str) -> SearchIntent:
-    keywords = list(
+    lowered = raw.casefold()
+    concepts = [
+        english
+        for pattern, english in _FALLBACK_CONCEPTS
+        if re.search(pattern, lowered, re.I | re.S)
+    ]
+    english_tokens = list(
         dict.fromkeys(re.findall(r"[a-zA-Z][a-zA-Z0-9_.+-]{1,30}", raw.lower()))
+    )
+    generic = {
+        "find",
+        "github",
+        "repo",
+        "repository",
+        "project",
+        "reposcout",
+        "tool",
+    }
+    keywords = list(
+        dict.fromkeys([*concepts, *(item for item in english_tokens if item not in generic)])
     )[:8]
-    return SearchIntent(goal=raw.strip(), keywords=keywords)
+    requirements = [
+        RequirementItem(
+            id=f"fallback_{index}",
+            description=concept,
+            retrieval_terms=[concept],
+            evidence_sources=["documentation"],
+        )
+        for index, concept in enumerate(concepts[1:], start=1)
+    ][:8]
+    return SearchIntent(
+        goal=raw.strip(),
+        requirements=requirements,
+        keywords=keywords,
+    )

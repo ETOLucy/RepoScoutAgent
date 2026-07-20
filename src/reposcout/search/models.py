@@ -20,12 +20,21 @@ class SearchStrategy(BaseModel):
     verifies: list[str] = Field(default_factory=list, max_length=8)
 
 
+class ComponentRole(BaseModel):
+    role: str = Field(min_length=1, max_length=60)
+    purpose: str = Field(min_length=1, max_length=240)
+    search_terms: list[str] = Field(min_length=1, max_length=4)
+    compatibility_interfaces: list[str] = Field(default_factory=list, max_length=8)
+    fulfills: list[str] = Field(default_factory=list, max_length=8)
+
+
 class SearchIntent(BaseModel):
     goal: str
     requirements: list[RequirementItem] = Field(default_factory=list)
     excluded: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list, max_length=8)
     search_strategies: list[SearchStrategy] = Field(default_factory=list, max_length=6)
+    component_roles: list[ComponentRole] = Field(default_factory=list, max_length=4)
     language: str | None = None
     minimum_stars: int = Field(default=0, ge=0)
     licenses: list[str] = Field(default_factory=list)
@@ -42,6 +51,7 @@ class SearchQuery(BaseModel):
     hypothesis: str = ""
     expected_signals: list[str] = Field(default_factory=list)
     verifies: list[str] = Field(default_factory=list)
+    component_role: str | None = None
 
 
 class SearchPlan(BaseModel):
@@ -65,6 +75,14 @@ class CriterionMatch(BaseModel):
     implementation_source_commit_sha: str | None = None
 
 
+class CorePurposeMatch(BaseModel):
+    status: Literal["matched", "mismatched", "unknown"] = "unknown"
+    evidence: str | None = None
+    source_path: str | None = None
+    source_commit_sha: str | None = None
+
+
 class RepositoryAssessment(BaseModel):
     summary: str
     criteria: list[CriterionMatch]
+    core_purpose: CorePurposeMatch = Field(default_factory=CorePurposeMatch)

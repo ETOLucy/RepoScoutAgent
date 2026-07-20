@@ -10,7 +10,9 @@ from typing import Any
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
+from .architecture import infer_component_roles
 from .candidate_selection import select_analysis_candidates
+from .compatibility import extract_compatibility_evidence
 from .evidence import (
     ASSESSMENT_PROMPT,
     rule_assessment,
@@ -43,9 +45,18 @@ from .search import (
     relax_github_query,
 )
 from .search.models import CriterionMatch
+from .solutions import build_evidence_matrix, build_solutions
 from .state import RepoScoutState
+from .web_search import WebSearchError, get_web_search_client
 
 load_dotenv()
+
+_requirement_timeout_seconds = 15.0
+
+
+def set_requirement_timeout(seconds: float) -> None:
+    global _requirement_timeout_seconds
+    _requirement_timeout_seconds = seconds
 
 LANGUAGES = {
     "python": "Python",
@@ -103,18 +114,27 @@ async def understand_requirement(state: RepoScoutState) -> dict[str, Any]:
     parser = "rules"
     if os.getenv("OPENAI_API_KEY"):
         try:
-            intent = await parse_search_intent_with_llm(
-                raw, _openai_client(), os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-            )
+            async with asyncio.timeout(_requirement_timeout_seconds):
+                intent = await parse_search_intent_with_llm(
+                    raw, _openai_client(), os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+                )
             parser = "llm"
         except Exception as exc:
             intent = parse_search_intent_with_rules(raw)
             parser = "rules_fallback"
-            warnings.append(f"LLM 需求解析失败，已降级为规则关键词：{type(exc).__name__}")
+            reason = "超时" if isinstance(exc, TimeoutError) else "失败"
+            warnings.append(
+                f"LLM 需求解析{reason}，已降级为规则关键词：{type(exc).__name__}"
+            )
     else:
         intent = parse_search_intent_with_rules(raw)
 
     constraints = _explicit_constraints(raw)
+    inferred_roles = infer_component_roles(intent)
+    existing_roles = {item.role for item in intent.component_roles}
+    intent.component_roles.extend(
+        item for item in inferred_roles if item.role not in existing_roles
+    )
     intent.language = constraints["language"]
     intent.minimum_stars = constraints["minimum_stars"]
     intent.licenses = constraints["licenses"]
@@ -175,8 +195,30 @@ async def search_github(state: RepoScoutState) -> dict[str, Any]:
     successful_queries: list[str] = []
     failures = 0
     query_metadata = {str(item["query"]): item for item in state.get("queries", [])}
+    github_future = asyncio.gather(*(run_search(item) for item in queries))
+    web_client = get_web_search_client()
+    web_hits = []
+    if web_client:
+        web_queries = [
+            " ".join(str(term) for term in item.get("keywords", []))
+            for item in state.get("queries", [])
+        ]
+        try:
+            web_hits = await web_client.search_repositories(web_queries)
+        except WebSearchError as exc:
+            warnings.append(f"网页召回已降级，仅使用 GitHub 搜索：{exc}")
+
+    async def hydrate_web_hit(hit: Any) -> tuple[Any, dict[str, Any] | Exception]:
+        try:
+            return hit, await get_github_client().get_repository(hit.full_name)
+        except GitHubSearchError as exc:
+            return hit, exc
+
+    web_hydration_future = asyncio.gather(
+        *(hydrate_web_hit(hit) for hit in web_hits[:8])
+    )
     for query_rank, (original_query, executed_query, outcome) in enumerate(
-        await asyncio.gather(*(run_search(item) for item in queries)), start=1
+        await github_future, start=1
     ):
         if isinstance(outcome, Exception):
             failures += 1
@@ -195,21 +237,75 @@ async def search_github(state: RepoScoutState) -> dict[str, Any]:
                         "discovery": {
                             "query_fingerprints": [],
                             "strategy_types": [],
+                            "component_roles": [],
                             "best_query_rank": query_rank,
+                            "sources": ["github_search"],
                         },
                     },
                 )
                 metadata = query_metadata.get(original_query, {})
                 fingerprint = str(metadata.get("fingerprint", ""))
                 strategy_type = str(metadata.get("strategy_type", ""))
+                component_role = metadata.get("component_role")
                 if fingerprint and fingerprint not in stored["discovery"]["query_fingerprints"]:
                     stored["discovery"]["query_fingerprints"].append(fingerprint)
                 if strategy_type and strategy_type not in stored["discovery"]["strategy_types"]:
                     stored["discovery"]["strategy_types"].append(strategy_type)
+                if (
+                    component_role
+                    and component_role not in stored["discovery"]["component_roles"]
+                ):
+                    stored["discovery"]["component_roles"].append(component_role)
                 stored["discovery"]["best_query_rank"] = min(
                     stored["discovery"]["best_query_rank"], query_rank
                 )
-    if failures == len(queries):
+    for hit, web_outcome in await web_hydration_future:
+        if isinstance(web_outcome, Exception):
+            continue
+        full_name = str(web_outcome.get("full_name", "")).casefold()
+        if not full_name:
+            continue
+        web_metadata = next(
+            (
+                item
+                for item in state.get("queries", [])
+                if " ".join(str(term) for term in item.get("keywords", []))
+                == hit.query
+            ),
+            {},
+        )
+        web_component_role = web_metadata.get("component_role")
+        stored = candidates_by_name.setdefault(
+            full_name,
+            {
+                **web_outcome,
+                "discovery": {
+                    "query_fingerprints": [],
+                    "strategy_types": ["web_discovery"],
+                    "component_roles": (
+                        [web_component_role] if web_component_role else []
+                    ),
+                    "best_query_rank": len(queries) + 1,
+                    "sources": ["brave_web_search"],
+                    "web_hits": [],
+                },
+            },
+        )
+        sources = stored["discovery"].setdefault("sources", ["github_search"])
+        if "brave_web_search" not in sources:
+            sources.append("brave_web_search")
+        component_roles = stored["discovery"].setdefault("component_roles", [])
+        if web_component_role and web_component_role not in component_roles:
+            component_roles.append(web_component_role)
+        stored["discovery"].setdefault("web_hits", []).append(
+            {
+                "title": hit.title,
+                "url": hit.url,
+                "description": hit.description,
+                "query": hit.query,
+            }
+        )
+    if failures == len(queries) and not candidates_by_name:
         return {
             "query": query,
             "candidates": [],
@@ -477,14 +573,6 @@ async def _match_document_batch(
             for item in assessment.criteria
             if item.status == "violated" and item.requirement_id in required_ids
         ]
-        if violated:
-            rejected.append(
-                {
-                    "full_name": candidate["full_name"],
-                    "reasons": [f"必需需求明确冲突：{', '.join(violated)}"],
-                }
-            )
-            continue
         satisfied = sum(
             item.status == "satisfied" and item.requirement_id in required_ids
             for item in assessment.criteria
@@ -496,13 +584,24 @@ async def _match_document_batch(
         coverage = satisfied / len(required_ids) if required_ids else 0.5
         implementation_coverage = implemented / len(required_ids) if required_ids else 0.0
         popularity = min(10.0, math.log10(candidate.get("stars", 0) + 1) * 2)
-        score = round(coverage * 80 + implementation_coverage * 10 + popularity, 1)
+        core_status = assessment.core_purpose.status
+        core_factor = {"matched": 1.0, "unknown": 0.55, "mismatched": 0.0}[core_status]
+        score = round(
+            (coverage * 80 + implementation_coverage * 10) * core_factor + popularity,
+            1,
+        )
+        compatibility = extract_compatibility_evidence(documents)
         recommendations.append(
             {
                 **{key: value for key, value in candidate.items() if key != "documents"},
                 "score": score,
                 "summary": assessment.summary,
+                "core_purpose": assessment.core_purpose.model_dump(),
                 "criteria": [item.model_dump() for item in assessment.criteria],
+                "component_roles": candidate.get("discovery", {}).get(
+                    "component_roles", []
+                ),
+                "compatibility": compatibility,
                 "document_paths": list(dict.fromkeys(item["path"] for item in documents)),
                 "retrieval": {
                     requirement_id: [
@@ -534,10 +633,25 @@ async def _match_document_batch(
                     len(item.get("content", "")) for item in analyst_documents
                 ),
                 "reasons": [
+                    f"核心用途匹配：{core_status}",
                     f"必需需求文档匹配 {satisfied}/{len(required_ids)}",
                     f"必需需求静态实现迹象 {implemented}/{len(required_ids)}",
                 ],
+                "_required_violations": violated,
+                "_core_purpose_mismatch": core_status == "mismatched",
                 "risks": [
+                    f"{requirement_id} 与必需需求明确冲突"
+                    for requirement_id in violated
+                ]
+                + [
+                    "仓库核心用途与用户目标不属于同一产品类别"
+                    for _ in range(core_status == "mismatched")
+                ]
+                + [
+                    "仓库核心用途缺少可验证证据"
+                    for _ in range(core_status == "unknown")
+                ]
+                + [
                     f"{item.requirement_id} 缺少文档证据"
                     for item in assessment.criteria
                     if item.status == "unknown"
@@ -549,7 +663,13 @@ async def _match_document_batch(
                 ],
             }
         )
-    recommendations.sort(key=lambda item: item["score"], reverse=True)
+    recommendations.sort(
+        key=lambda item: (
+            item.get("core_purpose", {}).get("status") == "matched",
+            item["score"],
+        ),
+        reverse=True,
+    )
     return {
         "recommendations": recommendations,
         "rejected_candidates": rejected,
@@ -564,6 +684,8 @@ async def match_documents(state: RepoScoutState) -> dict[str, Any]:
     if not candidates:
         return {
             "recommendations": [],
+            "solutions": [],
+            "evidence_matrix": {},
             "rejected_candidates": list(state.get("rejected_candidates", [])),
             "warnings": list(state.get("warnings", [])),
         }
@@ -587,13 +709,93 @@ async def match_documents(state: RepoScoutState) -> dict[str, Any]:
     recommendations = [
         item for outcome in outcomes for item in outcome["recommendations"]
     ]
-    recommendations.sort(key=lambda item: item["score"], reverse=True)
+    recommendations.sort(
+        key=lambda item: (
+            item.get("core_purpose", {}).get("status") == "matched",
+            item["score"],
+        ),
+        reverse=True,
+    )
+    for item in recommendations:
+        item["match_kind"] = (
+            "near_miss"
+            if item["_required_violations"] or item["_core_purpose_mismatch"]
+            else "eligible"
+        )
+    assessed_components = [
+        {
+            key: value
+            for key, value in item.items()
+            if key not in {"_required_violations", "_core_purpose_mismatch"}
+        }
+        for item in recommendations
+    ]
     rejected = list(state.get("rejected_candidates", []))
     rejected.extend(item for outcome in outcomes for item in outcome["rejected_candidates"])
     warnings = list(state.get("warnings", []))
     warnings.extend(item for outcome in outcomes for item in outcome["warnings"])
+    core_matches = [
+        item for item in recommendations if not item["_core_purpose_mismatch"]
+    ]
+    for item in recommendations:
+        if item["_core_purpose_mismatch"]:
+            rejected.append(
+                {
+                    "full_name": item["full_name"],
+                    "reasons": ["核心用途与用户目标不属于同一产品类别"],
+                }
+            )
+    recommendations = core_matches
+    eligible = [item for item in recommendations if not item["_required_violations"]]
+    if eligible:
+        for item in recommendations:
+            if item["_required_violations"]:
+                rejected.append(
+                    {
+                        "full_name": item["full_name"],
+                        "reasons": [
+                            "必需需求明确冲突："
+                            + ", ".join(item["_required_violations"])
+                        ],
+                    }
+                )
+        recommendations = eligible
+    elif recommendations:
+        warnings.append("没有发现满足全部硬条件的仓库，以下结果为最接近的候选")
+    recommendations = [
+        {
+            key: value
+            for key, value in item.items()
+            if key not in {"_required_violations", "_core_purpose_mismatch"}
+        }
+        for item in recommendations
+    ]
+    primary_recommendations = [
+        item
+        for item in recommendations
+        if not item.get("component_roles")
+        or any(
+            strategy not in {"component_role", "web_discovery"}
+            for strategy in item.get("discovery", {}).get("strategy_types", [])
+        )
+    ]
+    if primary_recommendations:
+        recommendations = primary_recommendations
+    solutions = build_solutions(
+        SearchIntent.model_validate(state["search_intent"]),
+        recommendations,
+        assessed_components,
+    )
+    evidence_matrix = build_evidence_matrix(
+        SearchIntent.model_validate(state["search_intent"]),
+        solutions,
+        assessed_components,
+    )
     return {
         "recommendations": recommendations,
+        "solutions": solutions,
+        "component_candidates": assessed_components,
+        "evidence_matrix": evidence_matrix,
         "rejected_candidates": rejected,
         "warnings": list(dict.fromkeys(warnings)),
     }
@@ -646,13 +848,13 @@ async def prepare_evidence(state: RepoScoutState) -> dict[str, Any]:
 async def generate_report(state: RepoScoutState) -> dict[str, Any]:
     if state.get("error"):
         return {"report": state["error"]}
-    recommendations = state.get("recommendations", [])
-    if not recommendations:
+    solutions = state.get("solutions", [])
+    if not solutions:
         report = "没有找到具备可分析 README/docs 的候选仓库。"
     else:
         report = (
             f"使用关键词查询 `{state['query']}`，读取候选仓库 README/docs 后，"
-            f"得到 {len(recommendations)} 个可评估结果。"
+            f"形成 {len(solutions)} 套有证据支持的候选方案。"
         )
     result: dict[str, Any] = {"report": report}
     with suppress(GitHubSearchError):

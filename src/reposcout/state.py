@@ -20,6 +20,9 @@ class RepoScoutState(TypedDict, total=False):
     node_timings: dict[str, float]
     rejected_candidates: list[dict[str, Any]]
     recommendations: list[dict[str, Any]]
+    component_candidates: list[dict[str, Any]]
+    solutions: list[dict[str, Any]]
+    evidence_matrix: dict[str, Any]
     warnings: list[str]
     report: str
     error: str

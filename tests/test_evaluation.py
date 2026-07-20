@@ -18,7 +18,7 @@ class OfflineEvaluationTest(unittest.TestCase):
         self.assertIn("ndcg_at_24_macro", report["metrics"])
         self.assertIn("search_stages", report["cases"][0])
         self.assertEqual(report["metrics"]["model_calls"], 44)
-        self.assertEqual(report["metrics"]["github_calls"], 90)
+        self.assertEqual(report["metrics"]["github_calls"], 107)
         self.assertGreater(report["metrics"]["estimated_input_tokens"], 0)
         self.assertEqual(report["metrics"]["cost_status"], "price_not_configured")
 

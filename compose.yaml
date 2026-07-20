@@ -4,13 +4,10 @@ services:
       context: .
     env_file:
       - .env
-    environment:
-      HOST: 0.0.0.0
-      PORT: 8000
     ports:
-      - "${REPOSCOUT_PORT:-8000}:8000"
+      - "8000:8000"
     volumes:
-      - reposcout-cache:/app/.cache/repository_documents
+      - reposcout-cache:/app/.cache
     restart: unless-stopped
     healthcheck:
       test:

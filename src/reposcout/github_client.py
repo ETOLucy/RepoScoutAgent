@@ -150,6 +150,7 @@ class GitHubClient:
         self._semaphore = asyncio.Semaphore(max_concurrency)
         self._max_attempts = max_attempts
         self._backoff_seconds = backoff_seconds
+        self._rate_limits: dict[str, dict[str, int | None]] = {}
         self._document_cache = DocumentCache(
             document_cache_dir or Path(".cache/repository_documents")
         )
@@ -168,6 +169,7 @@ class GitHubClient:
             try:
                 async with self._semaphore:
                     response = await self._client.get(url, params=params)
+                self._capture_rate_limit(response)
                 if response.status_code in (403, 429):
                     raise _status_error(response.status_code)
                 if response.status_code >= 500 and attempt < self._max_attempts:
@@ -185,6 +187,25 @@ class GitHubClient:
                 await asyncio.sleep(self._backoff_seconds * 2 ** (attempt - 1))
         raise GitHubSearchError("GitHub 请求在有限重试后失败。")
 
+    def _capture_rate_limit(self, response: httpx.Response) -> None:
+        resource = response.headers.get("X-RateLimit-Resource")
+        if resource not in {"core", "search"}:
+            return
+
+        def header_int(name: str) -> int | None:
+            raw = response.headers.get(name)
+            try:
+                return int(raw) if raw is not None else None
+            except ValueError:
+                return None
+
+        self._rate_limits[resource] = {
+            "limit": header_int("X-RateLimit-Limit"),
+            "remaining": header_int("X-RateLimit-Remaining"),
+            "used": header_int("X-RateLimit-Used"),
+            "reset": header_int("X-RateLimit-Reset"),
+        }
+
     async def search_repositories(self, query: str, limit: int = 15) -> list[dict[str, Any]]:
         response = await self._request(
             "https://api.github.com/search/repositories",
@@ -200,29 +221,40 @@ class GitHubClient:
         if not isinstance(items, list):
             raise GitHubSearchError("GitHub 搜索结果缺少有效的 items 列表。")
         try:
-            return [
-                {
-                    "full_name": item["full_name"],
-                    "url": item["html_url"],
-                    "description": item.get("description") or "暂无项目描述",
-                    "language": item.get("language"),
-                    "stars": item.get("stargazers_count", 0),
-                    "forks": item.get("forks_count", 0),
-                    "open_issues": item.get("open_issues_count", 0),
-                    "license": (item.get("license") or {}).get("spdx_id") or "Unknown",
-                    "topics": item.get("topics") or [],
-                    "archived": item.get("archived", False),
-                    "disabled": item.get("disabled", False),
-                    "fork": item.get("fork", False),
-                    "size": item.get("size"),
-                    "default_branch": item.get("default_branch"),
-                    "updated_at": item.get("updated_at", ""),
-                    "pushed_at": item.get("pushed_at") or item.get("updated_at", ""),
-                }
-                for item in items
-            ]
+            return [self._map_repository(item) for item in items]
         except (AttributeError, KeyError, TypeError) as exc:
             raise GitHubSearchError("GitHub 搜索结果中的仓库数据不完整。") from exc
+
+    @staticmethod
+    def _map_repository(item: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "full_name": item["full_name"],
+            "url": item["html_url"],
+            "description": item.get("description") or "暂无项目描述",
+            "language": item.get("language"),
+            "stars": item.get("stargazers_count", 0),
+            "forks": item.get("forks_count", 0),
+            "open_issues": item.get("open_issues_count", 0),
+            "license": (item.get("license") or {}).get("spdx_id") or "Unknown",
+            "topics": item.get("topics") or [],
+            "archived": item.get("archived", False),
+            "disabled": item.get("disabled", False),
+            "fork": item.get("fork", False),
+            "size": item.get("size"),
+            "default_branch": item.get("default_branch"),
+            "updated_at": item.get("updated_at", ""),
+            "pushed_at": item.get("pushed_at") or item.get("updated_at", ""),
+        }
+
+    async def get_repository(self, full_name: str) -> dict[str, Any]:
+        repository = quote(full_name, safe="/")
+        payload = _decode_json_response(
+            await self._request(f"https://api.github.com/repos/{repository}")
+        )
+        try:
+            return self._map_repository(payload)
+        except (AttributeError, KeyError, TypeError) as exc:
+            raise GitHubSearchError("GitHub 仓库数据不完整。") from exc
 
     async def fetch_repository_documents(
         self,
@@ -412,6 +444,11 @@ class GitHubClient:
         return chunks
 
     async def get_rate_limit(self) -> dict[str, Any]:
+        if self._rate_limits:
+            return {
+                resource: self._rate_limits.get(resource, {})
+                for resource in ("core", "search")
+            }
         payload = _decode_json_response(
             await self._request("https://api.github.com/rate_limit")
         )
