@@ -14,7 +14,8 @@ returns complete solution proposals rather than an unqualified list of repositor
 
 ## Key Capabilities
 
-- Natural-language task contracts with deterministic timeout fallback.
+- Natural-language task contracts that default to strict model parsing, with deterministic fallback
+  only when the caller explicitly enables it.
 - Multiple complementary GitHub queries instead of one all-keyword `AND` query.
 - GitHub discovery with optional self-hosted SearXNG web recall.
 - README, docs, releases, key issues, recent commits, manifests, and bounded source retrieval.
@@ -24,6 +25,9 @@ returns complete solution proposals rather than an unqualified list of repositor
 - Near-match results when no repository satisfies every hard constraint.
 - Multi-component solutions with primary, mobile sync, object storage, and reverse proxy roles.
 - Evidence matrices and SQLite research-task persistence.
+- SQLite-backed conversation/message history and resumable requirement checkpoints.
+- Collaborative requirement review with confirm, natural-language edit, and skip actions.
+- Structured execution traces and phase timings without storing private model chain-of-thought.
 - Explicit `auto`, `new`, and `refine` conversation context modes.
 - Optional Deep Code mode for repository-level code comprehension.
 
@@ -168,12 +172,27 @@ POST /api/search/stream
 ```
 
 Conversation behavior can be selected with `context_mode`: `auto`, `new`, or `refine`.
+Set `interactive: true` to pause after requirement parsing. The response includes a pending
+interaction with a plain-language goal and criteria. Resume it with:
 
 Research snapshots:
 
 ```http
 GET /api/research
 GET /api/research/{research_id}
+POST /api/research/{research_id}/resume
+Content-Type: application/json
+
+{"action":"confirm"}
+```
+
+The resume action can be `confirm`, `edit` with a `feedback` string, or `skip`. Conversation
+history is available through:
+
+```http
+GET /api/conversations
+GET /api/conversations/{conversation_id}
+DELETE /api/conversations/{conversation_id}
 ```
 
 Standalone Deep Code tool:
@@ -203,7 +222,12 @@ Tests use mocked provider responses and do not require live OpenAI or GitHub acc
 - GitHub recursive trees may be truncated for very large repositories; results expose this state.
 - Deep Code currently uses Python AST plus cross-language static symbol patterns, bounded file
   selection, and a validated model explanation rather than a persistent full-repository index.
-- Conversation context is bounded in-process memory and is cleared on restart.
+- Conversations, messages, pending checkpoints, and research payloads share
+  `.cache/research_tasks.db` and survive a single-instance restart. Compose persists this path in
+  the `reposcout-cache` volume; multi-instance coordination and user identity isolation are not
+  implemented.
+- Execution traces contain Graph stages, status, evidence summaries, and timings. API keys and
+  private model chain-of-thought are not stored.
 - SearXNG discovery was not part of every historical performance observation; each benchmark
   records whether it was enabled.
 

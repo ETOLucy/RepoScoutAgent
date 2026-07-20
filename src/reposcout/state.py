@@ -3,7 +3,12 @@ from typing import Any, TypedDict
 
 class RepoScoutState(TypedDict, total=False):
     raw_requirement: str
+    conversation_id: str
     deep_code_search: bool
+    allow_requirement_fallback: bool
+    interactive: bool
+    requirement_reviewed: bool
+    interaction: dict[str, Any]
     requirement: dict[str, Any]
     requirement_parser: str
     search_intent: dict[str, Any]

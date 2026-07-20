@@ -48,6 +48,7 @@ class CliTest(unittest.TestCase):
         self.assertIn("--github-max-concurrency", help_text)
         self.assertIn("--web-search-timeout", help_text)
         self.assertIn("--requirement-timeout", help_text)
+        self.assertIn("default: 60.0", help_text)
         self.assertIn("--searxng-url", help_text)
 
     def test_rejects_invalid_values(self):

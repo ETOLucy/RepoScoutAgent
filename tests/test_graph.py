@@ -102,7 +102,7 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
 
     @patch("src.reposcout.nodes.parse_search_intent_with_llm")
     @patch.dict(environ, {"OPENAI_API_KEY": "test-key"})
-    async def test_requirement_timeout_falls_back_to_rules(self, parse_intent):
+    async def test_requirement_timeout_falls_back_only_when_explicit(self, parse_intent):
         async def slow_parse(*_args):
             await asyncio.sleep(1)
 
@@ -110,13 +110,35 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
         set_requirement_timeout(0.001)
         try:
             result = await understand_requirement(
-                {"raw_requirement": "find GitHub repository discovery tool"}
+                {
+                    "raw_requirement": "find GitHub repository discovery tool",
+                    "allow_requirement_fallback": True,
+                }
             )
         finally:
-            set_requirement_timeout(15)
+            set_requirement_timeout(60)
 
         self.assertEqual(result["requirement_parser"], "rules_fallback")
         self.assertIn("超时", result["warnings"][0])
+
+    @patch("src.reposcout.nodes.parse_search_intent_with_llm")
+    @patch.dict(environ, {"OPENAI_API_KEY": "test-key"})
+    async def test_requirement_timeout_does_not_degrade_by_default(self, parse_intent):
+        async def slow_parse(*_args):
+            await asyncio.sleep(1)
+
+        parse_intent.side_effect = slow_parse
+        set_requirement_timeout(0.001)
+        try:
+            result = await understand_requirement(
+                {"raw_requirement": "find an agent development internship project"}
+            )
+        finally:
+            set_requirement_timeout(60)
+
+        self.assertIn("完整搜索未使用规则降级", result["error"])
+        self.assertNotIn("requirement_parser", result)
+        self.assertNotIn("search_intent", result)
 
     async def test_invalid_requirement_stops_early(self):
         result = await build_graph().ainvoke({"raw_requirement": "hi"})
@@ -124,11 +146,49 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("query", result)
 
     @patch.dict(environ, {"OPENAI_API_KEY": ""})
+    async def test_interactive_search_pauses_for_requirement_review(self):
+        result = await build_graph().ainvoke(
+            {
+                "raw_requirement": "find Python photo backup project",
+                "allow_requirement_fallback": True,
+                "interactive": True,
+            }
+        )
+
+        self.assertEqual(result["interaction"]["status"], "pending")
+        self.assertEqual(result["interaction"]["type"], "requirement_review")
+        self.assertNotIn("query", result)
+
+    @patch.dict(environ, {"OPENAI_API_KEY": ""})
+    async def test_reviewed_search_reuses_contract_and_continues(self):
+        intent = SearchIntent(
+            goal="find agent projects",
+            requirements=[RequirementItem(id="agent", description="agent framework")],
+            keywords=["agent framework"],
+        )
+        github = github_mock([], [])
+        with patch("src.reposcout.nodes.get_github_client", return_value=github):
+            result = await build_graph().ainvoke(
+                {
+                    "raw_requirement": "find agent projects",
+                    "search_intent": intent.model_dump(),
+                    "requirement_reviewed": True,
+                    "interactive": True,
+                }
+            )
+
+        self.assertIn("query", result)
+        self.assertEqual(result.get("interaction"), {})
+
+    @patch.dict(environ, {"OPENAI_API_KEY": ""})
     async def test_rule_fallback_searches_and_reads_documents(self):
         github = github_mock([REPOSITORY], DOCUMENTS)
         with patch("src.reposcout.nodes.get_github_client", return_value=github):
             result = await build_graph().ainvoke(
-                {"raw_requirement": "find Python photo backup project"}
+                {
+                    "raw_requirement": "find Python photo backup project",
+                    "allow_requirement_fallback": True,
+                }
             )
 
         self.assertEqual(
@@ -168,7 +228,10 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
             patch("src.reposcout.nodes.get_web_search_client", return_value=web),
         ):
             result = await build_graph().ainvoke(
-                {"raw_requirement": "find self hosted photo backup project"}
+                {
+                    "raw_requirement": "find self hosted photo backup project",
+                    "allow_requirement_fallback": True,
+                }
             )
 
         self.assertEqual(result["candidates"][0]["full_name"], "example/photo-app")
@@ -220,7 +283,12 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
     async def test_repository_without_readme_or_docs_is_rejected(self):
         github = github_mock([REPOSITORY], [])
         with patch("src.reposcout.nodes.get_github_client", return_value=github):
-            result = await build_graph().ainvoke({"raw_requirement": "find photo backup project"})
+            result = await build_graph().ainvoke(
+                {
+                    "raw_requirement": "find photo backup project",
+                    "allow_requirement_fallback": True,
+                }
+            )
 
         self.assertEqual(result["recommendations"], [])
         self.assertIn("README 或 docs", result["rejected_candidates"][0]["reasons"][0])
@@ -242,11 +310,25 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
 
         github.fetch_repository_documents.side_effect = fetch
         with patch("src.reposcout.nodes.get_github_client", return_value=github):
-            result = await build_graph().ainvoke({"raw_requirement": "find photo backup project"})
+            result = await build_graph().ainvoke(
+                {
+                    "raw_requirement": "find photo backup project",
+                    "allow_requirement_fallback": True,
+                }
+            )
 
         self.assertEqual(len(result["recommendations"]), 1)
         self.assertEqual(result["rejected_candidates"][0]["full_name"], "example/broken")
         self.assertIn("读取失败", result["rejected_candidates"][0]["reasons"][0])
+
+    @patch.dict(environ, {"OPENAI_API_KEY": ""})
+    async def test_missing_model_does_not_degrade_by_default(self):
+        result = await understand_requirement(
+            {"raw_requirement": "find an agent development project"}
+        )
+
+        self.assertIn("完整搜索无法生成任务契约", result["error"])
+        self.assertNotIn("search_intent", result)
 
     def test_unverifiable_llm_quote_is_downgraded_to_unknown(self):
         assessment = RepositoryAssessment(

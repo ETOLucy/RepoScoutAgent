@@ -39,6 +39,7 @@ class ApiTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("不执行候选代码", response.text)
         self.assertIn("新任务", response.text)
         self.assertIn("证据矩阵", response.text)
+        self.assertIn("完整搜索与快速降级", response.text)
 
     async def test_json_search_uses_async_graph(self):
         graph = AsyncMock()
@@ -59,6 +60,7 @@ class ApiTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.json()["turn"], 1)
         graph.ainvoke.assert_awaited_once()
         self.assertFalse(graph.ainvoke.await_args.args[0]["deep_code_search"])
+        self.assertFalse(graph.ainvoke.await_args.args[0]["allow_requirement_fallback"])
 
         self.assertEqual(restored.status_code, 200)
         self.assertEqual(restored.json()["report"], "done")
@@ -92,6 +94,132 @@ class ApiTest(unittest.IsolatedAsyncioTestCase):
                 )
 
         self.assertTrue(graph.ainvoke.await_args.args[0]["deep_code_search"])
+
+    async def test_search_passes_explicit_requirement_fallback_mode(self):
+        graph = AsyncMock()
+        graph.ainvoke.return_value = {"report": "done"}
+        with patch("main.GRAPH", graph):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                await client.post(
+                    "/api/search",
+                    json={
+                        "requirement": "find an agent project",
+                        "allow_requirement_fallback": True,
+                    },
+                )
+
+        self.assertTrue(
+            graph.ainvoke.await_args.args[0]["allow_requirement_fallback"]
+        )
+
+    async def test_interactive_search_saves_checkpoint_and_confirm_resumes(self):
+        graph = AsyncMock()
+        graph.ainvoke.side_effect = [
+            {
+                "report": "Please confirm",
+                "search_intent": {"goal": "agent project"},
+                "interaction": {
+                    "type": "requirement_review",
+                    "status": "pending",
+                    "goal": "agent project",
+                    "criteria": [],
+                },
+                "conversation_id": "ignored",
+            },
+            {
+                "report": "done",
+                "query": "agent archived:false",
+                "solutions": [{"id": "solution"}],
+                "interaction": {},
+            },
+        ]
+        with patch("main.GRAPH", graph):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                paused = await client.post(
+                    "/api/search",
+                    json={"requirement": "find an agent project", "interactive": True},
+                )
+                resumed = await client.post(
+                    f"/api/research/{paused.json()['research_id']}/resume",
+                    json={"action": "confirm"},
+                )
+
+        self.assertEqual(paused.json()["interaction"]["status"], "pending")
+        self.assertEqual(resumed.status_code, 200)
+        self.assertEqual(resumed.json()["report"], "done")
+        resumed_state = graph.ainvoke.await_args_list[1].args[0]
+        self.assertTrue(resumed_state["requirement_reviewed"])
+        self.assertEqual(resumed_state["search_intent"]["goal"], "agent project")
+
+    async def test_interactive_edit_reparses_and_pauses_again(self):
+        graph = AsyncMock()
+        graph.ainvoke.side_effect = [
+            {
+                "report": "confirm",
+                "search_intent": {"goal": "generic agent"},
+                "interaction": {
+                    "type": "requirement_review",
+                    "status": "pending",
+                    "goal": "generic agent",
+                    "criteria": [],
+                },
+            },
+            {
+                "report": "confirm revision",
+                "search_intent": {"goal": "internship agent"},
+                "interaction": {
+                    "type": "requirement_review",
+                    "status": "pending",
+                    "goal": "internship agent",
+                    "criteria": [],
+                },
+            },
+        ]
+        with patch("main.GRAPH", graph):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                paused = await client.post(
+                    "/api/search",
+                    json={"requirement": "find an agent project", "interactive": True},
+                )
+                revised = await client.post(
+                    f"/api/research/{paused.json()['research_id']}/resume",
+                    json={"action": "edit", "feedback": "适合大厂实习和二开"},
+                )
+
+        self.assertEqual(revised.status_code, 200)
+        self.assertEqual(revised.json()["interaction"]["goal"], "internship agent")
+        revised_state = graph.ainvoke.await_args_list[1].args[0]
+        self.assertFalse(revised_state["requirement_reviewed"])
+        self.assertNotIn("search_intent", revised_state)
+        self.assertIn("适合大厂实习和二开", revised_state["raw_requirement"])
+
+    async def test_conversation_history_lists_and_restores_messages(self):
+        graph = AsyncMock()
+        graph.ainvoke.return_value = {"report": "done"}
+        with patch("main.GRAPH", graph):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                search = await client.post(
+                    "/api/search", json={"requirement": "find history test project"}
+                )
+                conversation_id = search.json()["conversation_id"]
+                summaries = await client.get("/api/conversations")
+                detail = await client.get(f"/api/conversations/{conversation_id}")
+
+        self.assertTrue(
+            any(item["id"] == conversation_id for item in summaries.json())
+        )
+        self.assertEqual(
+            [item["role"] for item in detail.json()["messages"]],
+            ["user", "assistant"],
+        )
 
     async def test_deep_code_tool_validates_repository_and_returns_analysis(self):
         github = AsyncMock()

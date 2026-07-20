@@ -60,7 +60,7 @@ from .web_search import WebSearchError, get_web_search_client
 
 load_dotenv()
 
-_requirement_timeout_seconds = 15.0
+_requirement_timeout_seconds = 60.0
 
 
 def set_requirement_timeout(seconds: float) -> None:
@@ -118,6 +118,8 @@ def _explicit_constraints(raw: str) -> dict[str, Any]:
 
 
 async def understand_requirement(state: RepoScoutState) -> dict[str, Any]:
+    if state.get("requirement_reviewed") and state.get("search_intent"):
+        return {"interaction": {}, "clarification_questions": []}
     raw = state["raw_requirement"].strip()
     warnings = list(state.get("warnings", []))
     parser = "rules"
@@ -129,13 +131,29 @@ async def understand_requirement(state: RepoScoutState) -> dict[str, Any]:
                 )
             parser = "llm"
         except Exception as exc:
+            reason = "超时" if isinstance(exc, TimeoutError) else "失败"
+            if not state.get("allow_requirement_fallback", False):
+                return {
+                    "error": (
+                        f"LLM 需求解析{reason}，完整搜索未使用规则降级。"
+                        "请重试；如需优先返回，可显式开启“快速降级”。"
+                    ),
+                    "warnings": warnings,
+                }
             intent = parse_search_intent_with_rules(raw)
             parser = "rules_fallback"
-            reason = "超时" if isinstance(exc, TimeoutError) else "失败"
             warnings.append(
                 f"LLM 需求解析{reason}，已降级为规则关键词：{type(exc).__name__}"
             )
     else:
+        if not state.get("allow_requirement_fallback", False):
+            return {
+                "error": (
+                    "未配置 OPENAI_API_KEY，完整搜索无法生成任务契约。"
+                    "请配置模型，或显式开启“快速降级”。"
+                ),
+                "warnings": warnings,
+            }
         intent = parse_search_intent_with_rules(raw)
 
     constraints = _explicit_constraints(raw)
@@ -160,6 +178,45 @@ async def understand_requirement(state: RepoScoutState) -> dict[str, Any]:
         "requirement_parser": parser,
         "clarification_questions": intent.clarification_questions,
         "warnings": warnings,
+    }
+
+
+def review_requirement(state: RepoScoutState) -> dict[str, Any]:
+    intent = SearchIntent.model_validate(state["search_intent"])
+    criteria = [
+        {
+            "id": item.id,
+            "description": item.description,
+            "required": item.required,
+        }
+        for item in intent.requirements
+    ]
+    question = (
+        intent.clarification_questions[0]
+        if intent.clarification_questions
+        else "这个理解是否符合你的目标？你可以确认，或直接输入需要修改的地方。"
+    )
+    required = [item["description"] for item in criteria if item["required"]]
+    preferred = [item["description"] for item in criteria if not item["required"]]
+    lines = [
+        f"我理解你的目标是：{intent.goal}",
+        "",
+        "我会优先验证：",
+        *(f"- {item}" for item in required),
+    ]
+    if preferred:
+        lines.extend(["", "同时作为偏好考虑：", *(f"- {item}" for item in preferred)])
+    lines.extend(["", question])
+    return {
+        "report": "\n".join(lines),
+        "interaction": {
+            "type": "requirement_review",
+            "status": "pending",
+            "goal": intent.goal,
+            "criteria": criteria,
+            "question": question,
+            "actions": ["confirm", "edit", "skip"],
+        },
     }
 
 

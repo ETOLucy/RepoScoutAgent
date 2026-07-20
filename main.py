@@ -35,9 +35,10 @@ load_dotenv()
 
 ROOT = Path(__file__).parent
 STATIC_DIR = ROOT / "static"
+DATABASE_PATH = ROOT / ".cache" / "research_tasks.db"
 GRAPH = build_graph()
-CONVERSATIONS = ConversationStore()
-RESEARCH = ResearchStore(ROOT / ".cache" / "research_tasks.db")
+CONVERSATIONS = ConversationStore(DATABASE_PATH)
+RESEARCH = ResearchStore(DATABASE_PATH)
 
 
 @dataclass(frozen=True)
@@ -49,7 +50,7 @@ class ServerConfig:
     web_search_max_queries: int = 2
     web_search_results: int = 8
     web_search_timeout: float = 4.0
-    requirement_timeout: float = 15.0
+    requirement_timeout: float = 60.0
     searxng_url: str | None = None
 
 
@@ -119,7 +120,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--requirement-timeout",
         type=_positive_float,
-        default=15.0,
+        default=60.0,
         help="LLM requirement parsing time budget in seconds (default: %(default)s)",
     )
     parser.add_argument(
@@ -139,6 +140,13 @@ class SearchRequest(BaseModel):
     conversation_id: str | None = Field(default=None, min_length=1, max_length=80)
     context_mode: Literal["auto", "new", "refine"] = "auto"
     deep_code_search: bool = False
+    allow_requirement_fallback: bool = False
+    interactive: bool = False
+
+
+class ResumeRequest(BaseModel):
+    action: Literal["confirm", "edit", "skip"]
+    feedback: str = Field(default="", max_length=4000)
 
 
 class DeepCodeSearchRequest(BaseModel):
@@ -172,6 +180,7 @@ class SearchResponse(BaseModel):
     conversation_id: str = ""
     turn: int = 1
     node_timings: dict[str, float] = Field(default_factory=dict)
+    interaction: dict[str, Any] = Field(default_factory=dict)
     research_id: str = ""
     created_at: str = ""
 
@@ -197,14 +206,42 @@ def _remember_clarification(conversation_id: str, result: dict[str, Any]) -> Non
     )
 
 
-async def _save_research(
-    payload: dict[str, Any], conversation_id: str, query: str
+async def _persist_result(
+    result: dict[str, Any],
+    conversation_id: str,
+    query: str,
+    turn: int,
+    research_id: str | None = None,
 ) -> dict[str, Any]:
-    if not payload.get("query") or (
+    payload = _response_payload(result, conversation_id, turn)
+    pending = result.get("interaction", {}).get("status") == "pending"
+    if pending:
+        checkpoint_state = {**result, "conversation_id": conversation_id}
+        if research_id:
+            payload = await asyncio.to_thread(
+                RESEARCH.update_checkpoint, research_id, payload, checkpoint_state
+            )
+        else:
+            payload = await asyncio.to_thread(
+                RESEARCH.save_checkpoint,
+                conversation_id,
+                query,
+                payload,
+                checkpoint_state,
+            )
+    elif research_id:
+        payload = await asyncio.to_thread(RESEARCH.complete, research_id, payload)
+    elif payload.get("query") and not (
         payload.get("error") and not payload.get("solutions")
     ):
-        return payload
-    return await asyncio.to_thread(RESEARCH.save, conversation_id, query, payload)
+        payload = await asyncio.to_thread(
+            RESEARCH.save, conversation_id, query, payload
+        )
+    content = str(payload.get("report") or payload.get("error") or "任务已更新")
+    await asyncio.to_thread(
+        CONVERSATIONS.record_assistant, conversation_id, content, payload
+    )
+    return payload
 
 
 @asynccontextmanager
@@ -253,11 +290,16 @@ async def search(request: SearchRequest) -> JSONResponse:
         {
             "raw_requirement": raw_requirement,
             "deep_code_search": request.deep_code_search,
+            "allow_requirement_fallback": request.allow_requirement_fallback,
+            "conversation_id": conversation_id,
+            "interactive": request.interactive,
+            "requirement_reviewed": False,
         }
     )
     _remember_clarification(conversation_id, result)
-    payload = _response_payload(result, conversation_id, turn)
-    payload = await _save_research(payload, conversation_id, request.requirement)
+    payload = await _persist_result(
+        result, conversation_id, request.requirement, turn
+    )
     status = 400 if result.get("error") and not result.get("query") else 200
     return JSONResponse(content=payload, status_code=status)
 
@@ -275,6 +317,10 @@ async def search_stream(request: SearchRequest) -> StreamingResponse:
         state: dict[str, Any] = {
             "raw_requirement": raw_requirement,
             "deep_code_search": request.deep_code_search,
+            "allow_requirement_fallback": request.allow_requirement_fallback,
+            "conversation_id": conversation_id,
+            "interactive": request.interactive,
+            "requirement_reviewed": False,
         }
         try:
             async for update in GRAPH.astream(state, stream_mode="updates"):
@@ -300,9 +346,8 @@ async def search_stream(request: SearchRequest) -> StreamingResponse:
                         )
                     yield _sse("progress", progress)
             _remember_clarification(conversation_id, state)
-            payload = _response_payload(state, conversation_id, turn)
-            payload = await _save_research(
-                payload, conversation_id, request.requirement
+            payload = await _persist_result(
+                state, conversation_id, request.requirement, turn
             )
             yield _sse("result", payload)
         except asyncio.CancelledError:
@@ -319,8 +364,23 @@ async def search_stream(request: SearchRequest) -> StreamingResponse:
 
 @app.delete("/api/conversations/{conversation_id}")
 async def reset_conversation(conversation_id: str) -> dict[str, str]:
-    CONVERSATIONS.reset(conversation_id)
+    await asyncio.to_thread(CONVERSATIONS.reset, conversation_id)
     return {"status": "reset", "conversation_id": conversation_id}
+
+
+@app.get("/api/conversations")
+async def list_conversations(
+    limit: int = Query(default=50, ge=1, le=100),
+) -> list[dict[str, Any]]:
+    return await asyncio.to_thread(CONVERSATIONS.list, limit)
+
+
+@app.get("/api/conversations/{conversation_id}")
+async def get_conversation(conversation_id: str) -> dict[str, Any]:
+    result = await asyncio.to_thread(CONVERSATIONS.get, conversation_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    return result
 
 
 @app.get("/api/research")
@@ -336,6 +396,63 @@ async def get_research(research_id: str) -> dict[str, Any]:
     if result is None:
         raise HTTPException(status_code=404, detail="research task not found")
     return result
+
+
+@app.post("/api/research/{research_id}/resume")
+async def resume_research(
+    research_id: str, request: ResumeRequest
+) -> JSONResponse:
+    saved_state = await asyncio.to_thread(RESEARCH.resume_state, research_id)
+    if saved_state is None:
+        raise HTTPException(
+            status_code=409, detail="research task is not waiting for input"
+        )
+    conversation_id = str(saved_state.get("conversation_id", ""))
+    if not conversation_id:
+        raise HTTPException(status_code=409, detail="checkpoint has no conversation")
+
+    if request.action == "edit":
+        feedback = request.feedback.strip()
+        if not feedback:
+            raise HTTPException(status_code=422, detail="feedback is required for edit")
+        _, raw_requirement, turn = await asyncio.to_thread(
+            CONVERSATIONS.begin_turn, conversation_id, feedback, "refine"
+        )
+        state: dict[str, Any] = {
+            "raw_requirement": raw_requirement,
+            "conversation_id": conversation_id,
+            "interactive": True,
+            "requirement_reviewed": False,
+            "deep_code_search": bool(saved_state.get("deep_code_search")),
+            "allow_requirement_fallback": bool(
+                saved_state.get("allow_requirement_fallback")
+            ),
+        }
+        query = feedback
+    else:
+        label = "确认需求并继续" if request.action == "confirm" else "跳过确认并继续"
+        await asyncio.to_thread(
+            CONVERSATIONS.record_user_event, conversation_id, label
+        )
+        conversation = await asyncio.to_thread(CONVERSATIONS.get, conversation_id)
+        turn = int(conversation["turn_count"]) if conversation else 1
+        state = {
+            **saved_state,
+            "report": "",
+            "error": "",
+            "interaction": {},
+            "requirement_reviewed": True,
+            "interactive": request.action != "skip",
+        }
+        query = str(saved_state.get("raw_requirement", ""))
+
+    result = await GRAPH.ainvoke(state)
+    _remember_clarification(conversation_id, result)
+    payload = await _persist_result(
+        result, conversation_id, query, turn, research_id
+    )
+    status = 400 if result.get("error") and not result.get("query") else 200
+    return JSONResponse(content=payload, status_code=status)
 
 
 @app.post("/api/tools/deep-code-search")

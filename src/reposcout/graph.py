@@ -11,6 +11,7 @@ from .nodes import (
     prepare_evidence,
     rank_candidates,
     request_clarification,
+    review_requirement,
     search_github,
     understand_requirement,
     validate_request,
@@ -31,6 +32,8 @@ def _route_validation(state: RepoScoutState) -> str:
 def _route_intent(state: RepoScoutState) -> str:
     if state.get("error"):
         return "invalid"
+    if state.get("interactive") and not state.get("requirement_reviewed"):
+        return "review"
     return "clarify" if state.get("clarification_questions") else "plan"
 
 
@@ -51,6 +54,7 @@ def build_graph() -> Any:
         _timed("understand_requirement", understand_requirement),
     )
     builder.add_node("request_clarification", request_clarification)
+    builder.add_node("review_requirement", review_requirement)
     builder.add_node("plan_search", _timed("plan_search", plan_search))
     builder.add_node("search_github", _timed("search_github", search_github))
     builder.add_node("rank_candidates", _timed("rank_candidates", rank_candidates))
@@ -73,10 +77,16 @@ def build_graph() -> Any:
     builder.add_conditional_edges(
         "understand_requirement",
         _route_intent,
-        {"invalid": "invalid_request", "clarify": "request_clarification", "plan": "plan_search"},
+        {
+            "invalid": "invalid_request",
+            "review": "review_requirement",
+            "clarify": "request_clarification",
+            "plan": "plan_search",
+        },
     )
     builder.add_edge("invalid_request", END)
     builder.add_edge("request_clarification", END)
+    builder.add_edge("review_requirement", END)
     builder.add_edge("plan_search", "search_github")
     builder.add_edge("search_github", "rank_candidates")
     builder.add_edge("rank_candidates", "inspect_documents")
