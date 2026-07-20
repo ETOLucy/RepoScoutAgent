@@ -1,5 +1,7 @@
 # RepoScoutAgent 性能优化 STAR 档案
 
+[简体中文](PERFORMANCE_STAR.md) | [English](PERFORMANCE_STAR.en.md)
+
 > 长期维护约定：本文是项目性能工程的历史档案和简历素材来源，不应删除。
 > 后续优化可以修订解释、补充数据和追加新版本，但必须保留历史基线、测试条件、失败方案与质量护栏，不能只保留最新最好看的数字。
 

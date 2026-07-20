@@ -12,6 +12,15 @@ from openai import AsyncOpenAI
 
 from .architecture import infer_component_roles
 from .candidate_selection import select_analysis_candidates
+from .code_understanding import (
+    CODE_EXPLANATION_PROMPT,
+    CodeExplanation,
+    build_repo_map,
+    choose_code_inspection_budget,
+    code_understanding_result,
+    deterministic_code_explanation,
+    validate_code_explanation,
+)
 from .compatibility import extract_compatibility_evidence
 from .evidence import (
     ASSESSMENT_PROMPT,
@@ -847,6 +856,93 @@ async def prepare_evidence(state: RepoScoutState) -> dict[str, Any]:
         "effective_retrieval_mode": effective_retrieval_mode,
         "warnings": warnings,
     }
+
+
+async def inspect_repository_code(
+    repository: dict[str, Any], requirement: str = ""
+) -> dict[str, Any]:
+    budget = choose_code_inspection_budget(repository)
+    snapshot = await get_github_client().fetch_code_snapshot(
+        str(repository["full_name"]),
+        str(repository.get("default_branch") or "main"),
+        max_files=budget.max_files,
+        max_total_chars=budget.max_chars,
+    )
+    explanation = deterministic_code_explanation(snapshot)
+    method = "deterministic_repo_map"
+    if os.getenv("OPENAI_API_KEY") and snapshot.get("files"):
+        repo_map = build_repo_map(snapshot)
+        remaining = 100_000
+        sections = []
+        for item in snapshot["files"]:
+            if remaining <= 0:
+                break
+            content = str(item.get("content", ""))[:remaining]
+            sections.append(f"FILE: {item.get('path')}\n{content}")
+            remaining -= len(content)
+        try:
+            async with asyncio.timeout(35):
+                response: Any = await _openai_client().responses.parse(
+                    model=os.getenv(
+                        "OPENAI_ASSESSMENT_MODEL",
+                        os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+                    ),
+                    input=[
+                        {"role": "system", "content": CODE_EXPLANATION_PROMPT},
+                        {
+                            "role": "user",
+                            "content": (
+                                f"User context: {requirement}\n\nREPO MAP:\n{repo_map}\n\n"
+                                + "\n\n".join(sections)
+                            ),
+                        },
+                    ],
+                    text_format=CodeExplanation,
+                )
+            parsed = response.output_parsed
+            if isinstance(parsed, CodeExplanation):
+                explanation = validate_code_explanation(parsed, snapshot)
+                method = "llm_with_validated_code_quotes"
+        except Exception as exc:
+            explanation.limitations.append(
+                f"代码解释模型不可用，已降级为符号地图：{type(exc).__name__}"
+            )
+    if snapshot.get("tree_truncated"):
+        explanation.limitations.append("GitHub 返回的递归文件树已截断")
+    if int(snapshot.get("total_code_files", 0)) > budget.max_files:
+        explanation.limitations.append(
+            f"按 {budget.mode} 预算从 {snapshot.get('total_code_files')} 个代码文件中读取 "
+            f"{len(snapshot.get('files', []))} 个"
+        )
+    return code_understanding_result(
+        repository, budget, snapshot, explanation, analysis_method=method
+    )
+
+
+async def deep_code_search(state: RepoScoutState) -> dict[str, Any]:
+    if not state.get("deep_code_search"):
+        return {"code_understanding": []}
+    candidates = list(state.get("recommendations", []))[:3]
+    if not candidates:
+        return {"code_understanding": []}
+    semaphore = asyncio.Semaphore(2)
+
+    async def inspect(candidate: dict[str, Any]) -> dict[str, Any] | Exception:
+        try:
+            async with semaphore:
+                return await inspect_repository_code(
+                    candidate, str(state.get("raw_requirement", ""))
+                )
+        except (GitHubSearchError, KeyError, ValueError) as exc:
+            return exc
+
+    outcomes = await asyncio.gather(*(inspect(item) for item in candidates))
+    results = [item for item in outcomes if isinstance(item, dict)]
+    failures = sum(isinstance(item, Exception) for item in outcomes)
+    warnings = list(state.get("warnings", []))
+    if failures:
+        warnings.append(f"{failures} 个候选的深度代码理解失败，其他结果继续返回")
+    return {"code_understanding": results, "warnings": warnings}
 
 
 async def generate_report(state: RepoScoutState) -> dict[str, Any]:

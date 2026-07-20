@@ -3,6 +3,7 @@ from typing import Any, cast
 from langgraph.graph import END, START, StateGraph
 
 from .nodes import (
+    deep_code_search,
     generate_report,
     inspect_documents,
     match_documents,
@@ -37,6 +38,10 @@ def _invalid_request(state: RepoScoutState) -> dict[str, str]:
     return {"report": state.get("error", "需求无效。")}
 
 
+def _route_deep_code_search(state: RepoScoutState) -> str:
+    return "deep" if state.get("deep_code_search") else "report"
+
+
 def build_graph() -> Any:
     builder = StateGraph(RepoScoutState)
     builder.add_node("validate_request", _timed("validate_request", validate_request))
@@ -54,6 +59,9 @@ def build_graph() -> Any:
     )
     builder.add_node("prepare_evidence", _timed("prepare_evidence", prepare_evidence))
     builder.add_node("match_documents", _timed("match_documents", match_documents))
+    builder.add_node(
+        "deep_code_search", _timed("deep_code_search", deep_code_search)
+    )
     builder.add_node("generate_report", _timed("generate_report", generate_report))
 
     builder.add_edge(START, "validate_request")
@@ -74,6 +82,11 @@ def build_graph() -> Any:
     builder.add_edge("rank_candidates", "inspect_documents")
     builder.add_edge("inspect_documents", "prepare_evidence")
     builder.add_edge("prepare_evidence", "match_documents")
-    builder.add_edge("match_documents", "generate_report")
+    builder.add_conditional_edges(
+        "match_documents",
+        _route_deep_code_search,
+        {"deep": "deep_code_search", "report": "generate_report"},
+    )
+    builder.add_edge("deep_code_search", "generate_report")
     builder.add_edge("generate_report", END)
     return builder.compile()

@@ -1,5 +1,7 @@
 # Offline Evaluation
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 `baseline_cases.json` contains 15 manually labelled natural-language search cases. Each case fixes the parsed intent, GitHub Search repositories, Tree paths and Contents text, model assessments, relevant repositories, and expected evidence requirements. Document-map keys are the recorded Tree paths and their values are the recorded Contents responses.
 
 Run the current full-document baseline without network access:

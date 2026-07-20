@@ -1,5 +1,7 @@
 # RepoScoutAgent Roadmap
 
+[简体中文](TODO.md) | [English](TODO.en.md)
+
 这里只记录尚未完成的工作。当前能力和使用方法见 [README.md](README.md)，性能历史见
 [`docs/PERFORMANCE_STAR.md`](docs/PERFORMANCE_STAR.md)，性能验收计划见
 [`docs/PERFORMANCE_MILESTONE.md`](docs/PERFORMANCE_MILESTONE.md)。

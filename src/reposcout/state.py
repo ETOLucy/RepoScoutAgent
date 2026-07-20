@@ -3,6 +3,7 @@ from typing import Any, TypedDict
 
 class RepoScoutState(TypedDict, total=False):
     raw_requirement: str
+    deep_code_search: bool
     requirement: dict[str, Any]
     requirement_parser: str
     search_intent: dict[str, Any]
@@ -23,6 +24,7 @@ class RepoScoutState(TypedDict, total=False):
     component_candidates: list[dict[str, Any]]
     solutions: list[dict[str, Any]]
     evidence_matrix: dict[str, Any]
+    code_understanding: list[dict[str, Any]]
     warnings: list[str]
     report: str
     error: str

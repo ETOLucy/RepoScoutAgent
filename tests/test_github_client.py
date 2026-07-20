@@ -17,6 +17,39 @@ def _async_client(handler: Handler) -> httpx.AsyncClient:
 
 
 class GitHubClientTest(unittest.IsolatedAsyncioTestCase):
+    async def test_code_snapshot_prioritizes_entries_and_skips_large_or_vendor_files(self):
+        requested: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if "/git/trees/" in request.url.path:
+                return httpx.Response(
+                    200,
+                    json={
+                        "sha": "code-sha",
+                        "truncated": True,
+                        "tree": [
+                            {"path": "src/main.py", "type": "blob", "size": 100},
+                            {"path": "src/service.py", "type": "blob", "size": 100},
+                            {"path": "vendor/hidden.py", "type": "blob", "size": 100},
+                            {"path": "src/huge.py", "type": "blob", "size": 300_000},
+                            {"path": "README.md", "type": "blob", "size": 100},
+                        ],
+                    },
+                )
+            requested.append(request.url.path)
+            content = base64.b64encode(b"def run(): pass").decode()
+            return httpx.Response(200, json={"encoding": "base64", "content": content})
+
+        async with _async_client(handler) as transport_client:
+            snapshot = await GitHubClient(transport_client).fetch_code_snapshot(
+                "example/repo", "main", max_files=1, max_total_chars=100
+            )
+
+        self.assertTrue(snapshot["tree_truncated"])
+        self.assertEqual(snapshot["total_code_files"], 2)
+        self.assertEqual(snapshot["files"][0]["path"], "src/main.py")
+        self.assertEqual(len(requested), 1)
+
     async def test_fetches_only_relevant_whitelisted_static_files(self):
         def handler(request: httpx.Request) -> httpx.Response:
             if "/git/trees/" in request.url.path:

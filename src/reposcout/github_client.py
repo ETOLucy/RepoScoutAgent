@@ -61,6 +61,15 @@ _EXCLUDED_PATH_PARTS = {
     "vendor",
 }
 
+_CODE_ENTRY_NAMES = {
+    "app",
+    "cli",
+    "index",
+    "main",
+    "manage",
+    "server",
+}
+
 
 def _implementation_terms(values: list[str]) -> set[str]:
     return {
@@ -442,6 +451,91 @@ class GitHubClient:
         )
         self._document_cache.save(full_name, cache_key, chunks, documents)
         return chunks
+
+    async def fetch_code_snapshot(
+        self,
+        full_name: str,
+        default_branch: str,
+        *,
+        max_files: int,
+        max_total_chars: int,
+    ) -> dict[str, Any]:
+        repository = quote(full_name, safe="/")
+        branch = quote(default_branch, safe="")
+        tree_payload = _decode_json_response(
+            await self._request(
+                f"https://api.github.com/repos/{repository}/git/trees/{branch}",
+                params={"recursive": "1"},
+            )
+        )
+        raw_tree = tree_payload.get("tree", [])
+        if not isinstance(raw_tree, list):
+            raise GitHubSearchError("仓库文件树数据结构无效。")
+        code_entries = []
+        for item in raw_tree:
+            if not isinstance(item, dict) or item.get("type") != "blob":
+                continue
+            path = str(item.get("path", ""))
+            pure = PurePosixPath(path.casefold())
+            if (
+                any(part in _EXCLUDED_PATH_PARTS for part in pure.parts)
+                or pure.suffix not in _IMPLEMENTATION_SUFFIXES
+            ):
+                continue
+            size = int(item.get("size") or 0)
+            if size > 200_000:
+                continue
+            name_priority = 0 if pure.name in _MANIFEST_NAMES else 1
+            entry_priority = 0 if pure.stem in _CODE_ENTRY_NAMES else 1
+            source_priority = (
+                0
+                if pure.parts and pure.parts[0] in {"src", "app", "pkg", "internal"}
+                else 1
+            )
+            code_entries.append(
+                ((name_priority, entry_priority, source_priority, len(pure.parts), path), path)
+            )
+        code_entries.sort(key=lambda item: item[0])
+        selected = [path for _priority, path in code_entries[:max_files]]
+        per_file_limit = max(4_000, min(80_000, max_total_chars // max(1, len(selected))))
+
+        async def fetch(path: str) -> dict[str, str] | None:
+            payload = _decode_json_response(
+                await self._request(
+                    f"https://api.github.com/repos/{repository}/contents/{quote(path, safe='/')}",
+                    params={"ref": default_branch},
+                )
+            )
+            encoded = payload.get("content")
+            if not isinstance(encoded, str) or payload.get("encoding") != "base64":
+                return None
+            try:
+                content = base64.b64decode(encoded).decode("utf-8", errors="replace")
+            except (binascii.Error, ValueError):
+                return None
+            return {
+                "path": path,
+                "url": f"https://github.com/{full_name}/blob/{tree_payload.get('sha')}/{path}",
+                "content": content[:per_file_limit],
+            }
+
+        fetched = await asyncio.gather(*(fetch(path) for path in selected))
+        files = [item for item in fetched if item is not None]
+        remaining = max_total_chars
+        bounded_files = []
+        for item in files:
+            if remaining <= 0:
+                break
+            content = item["content"][:remaining]
+            bounded_files.append({**item, "content": content})
+            remaining -= len(content)
+        return {
+            "repository": full_name,
+            "commit_sha": str(tree_payload.get("sha") or default_branch),
+            "tree_truncated": bool(tree_payload.get("truncated")),
+            "total_code_files": len(code_entries),
+            "files": bounded_files,
+        }
 
     async def get_rate_limit(self) -> dict[str, Any]:
         if self._rate_limits:

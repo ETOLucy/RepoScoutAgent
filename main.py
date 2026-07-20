@@ -19,8 +19,13 @@ from pydantic import BaseModel, Field
 
 from src.reposcout import build_graph
 from src.reposcout.conversations import ConversationStore
-from src.reposcout.github_client import GitHubClient, set_github_client
-from src.reposcout.nodes import set_requirement_timeout
+from src.reposcout.github_client import (
+    GitHubClient,
+    GitHubSearchError,
+    get_github_client,
+    set_github_client,
+)
+from src.reposcout.nodes import inspect_repository_code, set_requirement_timeout
 from src.reposcout.research import ResearchStore
 from src.reposcout.web_search import (
     BraveWebSearchClient,
@@ -137,6 +142,16 @@ class SearchRequest(BaseModel):
     requirement: str = Field(min_length=1, max_length=4000)
     conversation_id: str | None = Field(default=None, min_length=1, max_length=80)
     context_mode: Literal["auto", "new", "refine"] = "auto"
+    deep_code_search: bool = False
+
+
+class DeepCodeSearchRequest(BaseModel):
+    repository: str = Field(
+        min_length=3,
+        max_length=200,
+        pattern=r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
+    )
+    requirement: str = Field(default="", max_length=4000)
 
 
 class SearchResponse(BaseModel):
@@ -148,6 +163,7 @@ class SearchResponse(BaseModel):
     component_candidates: list[dict[str, Any]] = Field(default_factory=list)
     solutions: list[dict[str, Any]] = Field(default_factory=list)
     evidence_matrix: dict[str, Any] = Field(default_factory=dict)
+    code_understanding: list[dict[str, Any]] = Field(default_factory=list)
     rejected_candidates: list[dict[str, Any]] = Field(default_factory=list)
     requirement_parser: str = ""
     search_intent: dict[str, Any] = Field(default_factory=dict)
@@ -248,7 +264,12 @@ async def health() -> dict[str, str]:
 @app.post("/api/search")
 async def search(request: SearchRequest) -> JSONResponse:
     conversation_id, raw_requirement, turn = _conversation_input(request)
-    result = await GRAPH.ainvoke({"raw_requirement": raw_requirement})
+    result = await GRAPH.ainvoke(
+        {
+            "raw_requirement": raw_requirement,
+            "deep_code_search": request.deep_code_search,
+        }
+    )
     _remember_clarification(conversation_id, result)
     payload = _response_payload(result, conversation_id, turn)
     payload = await _save_research(payload, conversation_id, request.requirement)
@@ -266,7 +287,10 @@ async def search_stream(request: SearchRequest) -> StreamingResponse:
     conversation_id, raw_requirement, turn = _conversation_input(request)
 
     async def events() -> AsyncIterator[str]:
-        state: dict[str, Any] = {"raw_requirement": raw_requirement}
+        state: dict[str, Any] = {
+            "raw_requirement": raw_requirement,
+            "deep_code_search": request.deep_code_search,
+        }
         try:
             async for update in GRAPH.astream(state, stream_mode="updates"):
                 for node, values in update.items():
@@ -327,6 +351,15 @@ async def get_research(research_id: str) -> dict[str, Any]:
     if result is None:
         raise HTTPException(status_code=404, detail="research task not found")
     return result
+
+
+@app.post("/api/tools/deep-code-search")
+async def deep_code_search_tool(request: DeepCodeSearchRequest) -> dict[str, Any]:
+    try:
+        repository = await get_github_client().get_repository(request.repository)
+        return await inspect_repository_code(repository, request.requirement)
+    except GitHubSearchError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

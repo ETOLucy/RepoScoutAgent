@@ -1,5 +1,7 @@
 # Performance Engineering v1
 
+[简体中文](PERFORMANCE_MILESTONE.md) | [English](PERFORMANCE_MILESTONE.en.md)
+
 ## Goal
 
 在不降低 Recall@analysis、Success@5、NDCG@5、L2 Precision 和 Citation Accuracy 的前提下，

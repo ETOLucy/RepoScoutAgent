@@ -11,6 +11,7 @@ from src.reposcout.evidence import (
 from src.reposcout.github_client import GitHubSearchError
 from src.reposcout.graph import build_graph
 from src.reposcout.nodes import (
+    deep_code_search,
     match_documents,
     set_requirement_timeout,
     understand_requirement,
@@ -59,6 +60,7 @@ def github_mock(
         search_repositories=AsyncMock(return_value=repositories or []),
         get_repository=AsyncMock(return_value=(repositories or [REPOSITORY])[0]),
         fetch_repository_documents=AsyncMock(),
+        fetch_code_snapshot=AsyncMock(),
         get_rate_limit=AsyncMock(return_value={}),
     )
     if isinstance(documents, Exception):
@@ -69,6 +71,35 @@ def github_mock(
 
 
 class GraphTest(unittest.IsolatedAsyncioTestCase):
+    @patch.dict(environ, {"OPENAI_API_KEY": ""})
+    async def test_deep_code_search_is_explicit_and_returns_repo_map(self):
+        github = github_mock()
+        github.fetch_code_snapshot.return_value = {
+            "repository": "example/photo-app",
+            "commit_sha": "abc",
+            "tree_truncated": False,
+            "total_code_files": 1,
+            "files": [{"path": "src/main.py", "content": "def run(): pass"}],
+        }
+        state = {
+            "deep_code_search": True,
+            "raw_requirement": "understand the code",
+            "recommendations": [REPOSITORY],
+        }
+
+        with patch("src.reposcout.nodes.get_github_client", return_value=github):
+            result = await deep_code_search(state)
+
+        self.assertEqual(result["code_understanding"][0]["mode"], "broad")
+        self.assertIn("run", result["code_understanding"][0]["repo_map"])
+        github.fetch_code_snapshot.assert_awaited_once_with(
+            "example/photo-app", "main", max_files=24, max_total_chars=240_000
+        )
+
+    async def test_deep_code_search_disabled_does_no_io(self):
+        result = await deep_code_search({"deep_code_search": False})
+        self.assertEqual(result, {"code_understanding": []})
+
     @patch("src.reposcout.nodes.parse_search_intent_with_llm")
     @patch.dict(environ, {"OPENAI_API_KEY": "test-key"})
     async def test_requirement_timeout_falls_back_to_rules(self, parse_intent):

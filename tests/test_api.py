@@ -46,6 +46,7 @@ class ApiTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(response.json()["research_id"])
         self.assertEqual(response.json()["turn"], 1)
         graph.ainvoke.assert_awaited_once()
+        self.assertFalse(graph.ainvoke.await_args.args[0]["deep_code_search"])
 
         self.assertEqual(restored.status_code, 200)
         self.assertEqual(restored.json()["report"], "done")
@@ -65,6 +66,42 @@ class ApiTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("duration_ms", response.text)
         self.assertIn('event: result\ndata: {"requirement":{}', response.text)
         self.assertEqual(graph.stream_mode, "updates")
+
+    async def test_search_passes_explicit_deep_code_mode(self):
+        graph = AsyncMock()
+        graph.ainvoke.return_value = {"report": "done"}
+        with patch("main.GRAPH", graph):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                await client.post(
+                    "/api/search",
+                    json={"requirement": "find an agent", "deep_code_search": True},
+                )
+
+        self.assertTrue(graph.ainvoke.await_args.args[0]["deep_code_search"])
+
+    async def test_deep_code_tool_validates_repository_and_returns_analysis(self):
+        github = AsyncMock()
+        github.get_repository.return_value = {"full_name": "example/repo"}
+        expected = {"repository": "example/repo", "summary": "worker service"}
+        with (
+            patch("main.get_github_client", return_value=github),
+            patch("main.inspect_repository_code", AsyncMock(return_value=expected)),
+        ):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                invalid = await client.post(
+                    "/api/tools/deep-code-search", json={"repository": "invalid"}
+                )
+                response = await client.post(
+                    "/api/tools/deep-code-search",
+                    json={"repository": "example/repo", "requirement": "explain it"},
+                )
+
+        self.assertEqual(invalid.status_code, 422)
+        self.assertEqual(response.json(), expected)
 
     async def test_follow_up_reuses_conversation_context(self):
         graph = AsyncMock()
