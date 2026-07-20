@@ -5,6 +5,25 @@
 RepoScoutAgent 是一个基于可校验证据的开源方案发现与比较工具。
 当前提供 L1 文档证据匹配、L2 静态实现验证和用户可选的 Deep Code 代码理解；项目不执行候选仓库代码。
 
+## 功能总览
+
+- **协作式需求确认**：默认先展示系统理解的目标、必须条件和偏好条件；用户可以确认、
+  直接输入修改意见，或跳过本次确认后继续。
+- **严格搜索模式**：需求解析失败或超时时默认明确停止，不会把低质量关键词降级伪装成
+  完整搜索；只有用户主动开启“快速降级”才允许规则解析。
+- **多源候选召回**：优先组合 GitHub 原生搜索与自托管 SearXNG 网页发现；没有网页搜索
+  服务时仍可使用 GitHub，不依赖付费搜索接口。
+- **方案而非仓库列表**：除核心仓库外，还可独立召回移动端同步、对象存储和反向代理等
+  配套角色，并依据双方文档中的共享接口验证兼容性。
+- **证据矩阵**：按“需求 × 方案”展示满足、冲突和未知状态，并保留引用路径、提交版本和
+  L2 静态实现迹象。
+- **可选深度代码理解**：Deep Code 用自适应预算解释陌生仓库的入口、模块职责和主要数据
+  流；它与“功能是否存在”的 L2 验证分开，也不会执行候选代码。
+- **持久化研究会话**：SQLite 保存用户消息、助手结果、待确认检查点和完整研究快照；应用
+  或容器重启后可以从历史会话继续。
+- **可审计执行过程**：前端累积展示主要阶段、状态和耗时，可折叠隐藏；展示的是结构化执行
+  轨迹，不是模型的私有思维链。
+
 用户用自然语言说明想找什么项目以及需要哪些能力，例如：
 
 > 找一个可以自托管家庭照片、支持人脸识别和手机自动备份、能够用 Docker 部署的开源项目。
@@ -43,18 +62,28 @@ Nginx，则标记为 `documented_by_primary`，表示仍需对配套方做端到
 
 ```mermaid
 flowchart LR
-    A[自然语言需求] --> B[LLM 需求与搜索策略]
-    B --> C[多假设 GitHub 候选发现]
-    C --> D[仓库级语义重排]
-    D --> E[读取前 24 个仓库的证据]
-    E --> I[批量编码与证据预筛选]
-    I --> F[并发验证 8 个候选]
-    F --> H[引用校验]
-    H --> J{启用 Deep Code?}
-    J -- 否 --> G[可解释排序结果]
-    J -- 是 --> K[自适应 repo map 与代码解释]
-    K --> G
+    A[自然语言需求] --> B[生成任务契约]
+    B --> C{协作模式?}
+    C -- 是 --> D[展示目标与验证条件]
+    D --> E{用户操作}
+    E -- 修改 --> B
+    E -- 确认或跳过 --> F[编译搜索计划]
+    C -- 否 --> F
+    F --> G[GitHub 与 SearXNG 多源召回]
+    G --> H[仓库级重排]
+    H --> I[读取前 24 个仓库的证据]
+    I --> J[批量编码与证据预筛选]
+    J --> K[并发验证 8 个候选]
+    K --> L[引用校验与多组件组装]
+    L --> M{启用 Deep Code?}
+    M -- 否 --> N[方案与证据矩阵]
+    M -- 是 --> O[自适应仓库地图与代码解释]
+    O --> N
 ```
+
+协作模式在需求理解后暂停 Graph，并把状态保存为 `pending` 研究任务。确认操作复用已经解析的
+任务契约，不重复调用需求模型；修改操作把自然语言反馈并入当前会话，重新生成契约后再次等待
+确认。该暂停点是可恢复的应用状态，不依赖浏览器页面一直打开。
 
 ### 1. 理解需求
 
@@ -205,6 +234,22 @@ GET /api/research/{research_id}
 POST /api/research/{research_id}/resume
 ```
 
+恢复待确认任务：
+
+```http
+POST /api/research/{research_id}/resume
+Content-Type: application/json
+
+{"action":"confirm"}
+```
+
+`action` 支持 `confirm`（确认并继续）、`edit`（携带 `feedback` 修改需求）和 `skip`
+（跳过本次确认）。例如：
+
+```json
+{"action":"edit","feedback":"更重视适合实习二开，并要求有测试和清晰的贡献入口"}
+```
+
 会话历史接口：
 
 ```http
@@ -212,6 +257,9 @@ GET /api/conversations
 GET /api/conversations/{conversation_id}
 DELETE /api/conversations/{conversation_id}
 ```
+
+列表接口按最近更新时间返回会话；详情接口返回完整的用户/助手消息及当时的结构化结果。
+网页中的“新对话”只切换当前会话，不会删除历史记录；删除必须显式调用 `DELETE` 接口。
 
 代码理解工具：
 
@@ -298,7 +346,7 @@ Content-Type: application/json
 POST /api/search/stream
 Content-Type: application/json
 
-{"requirement":"找一个支持人脸识别和 Docker 部署的自托管照片项目"}
+{"requirement":"找一个支持人脸识别和 Docker 部署的自托管照片项目","interactive":true}
 ```
 
 接口使用 Server-Sent Events 依次返回 Graph 节点进度和最终 `result` 事件，前端默认使用该接口。
@@ -358,6 +406,8 @@ L2 静态证据门槛评测：
 [docs/PERFORMANCE_HISTORY.md](docs/PERFORMANCE_HISTORY.md)。该文档作为公开工程档案保留，后续优化追加或修订，不删除旧基线。
 下一阶段的性能 Milestone、建议 Issues 和质量门槛见
 [docs/PERFORMANCE_MILESTONE.md](docs/PERFORMANCE_MILESTONE.md)。
+
+全部文档入口和维护约定见 [docs/README.md](docs/README.md)。
 
 后续路线见 [TODO.md](TODO.md)。
 

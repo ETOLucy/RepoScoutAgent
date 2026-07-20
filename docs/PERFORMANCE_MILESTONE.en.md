@@ -15,8 +15,12 @@ p50/p95, TTFC/TTFV, call/token/cost traces, and separate Deep Code latency repor
 - [x] Batched embeddings, content cache, and cross-request embedding circuit breaker.
 - [x] Per-node timing in JSON and SSE progress.
 - [x] Provisional candidates and analysis counts streamed early.
-- [x] Dedicated requirement-parsing timeout with deterministic Chinese/English fallback.
+- [x] Dedicated requirement-parsing timeout with user-enabled deterministic fallback.
 - [x] Optional Deep Code node excluded from the default latency path.
+- [x] SQLite persistence for conversations, messages, research snapshots, and pending checkpoints.
+- [x] Collaborative requirement review with confirm, natural-language edit, and skip actions.
+- [x] Structured frontend execution trace with phase state and node timings.
+- [x] Chinese narrative for Chinese or mixed-language requests, independent of English retrieval terms.
 
 ## Proposed Work
 

@@ -152,3 +152,25 @@ default-search p50/p95. Report at least:
 
 Established, small, medium, large, and truncated-tree repositories must be separate benchmark
 groups. Deep Code explains code responsibilities; it is not an L3 build or L4 runtime probe.
+
+## Collaborative Research Sessions And Language Consistency
+
+The current version adds a resumable interaction checkpoint after task-contract generation. Users
+can confirm, correct the interpretation in natural language, or skip the checkpoint. Confirmation
+reuses the parsed contract; correction intentionally pays the cost of parsing a revised contract.
+
+SQLite now stores conversations, user and assistant messages, pending graph state, and complete
+research payloads in `.cache/research_tasks.db`. The Compose cache volume preserves this database
+across application-container restarts. The frontend lists historical conversations and accumulates
+SSE events into a collapsible execution trace with phase state and timings. This trace contains
+structured workflow information, not private model chain-of-thought.
+
+Chinese and mixed Chinese/English requests now produce Simplified Chinese goals, criteria,
+hypotheses, clarification questions, repository summaries, and Deep Code explanations. GitHub
+queries and evidence-retrieval terms may remain English for recall quality. Strict search is the
+default: requirement parsing failures stop explicitly after the 60-second budget unless the user
+enables fast deterministic fallback.
+
+Verification covered 106 tests at 88.47% total coverage, Ruff, mypy, a successful container build,
+restart recovery of a pending checkpoint, and a real Chinese task contract. These checks establish
+functional behavior only; they do not add a statistically valid latency baseline.

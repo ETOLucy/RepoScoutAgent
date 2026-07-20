@@ -73,15 +73,27 @@ present in the referenced source file.
 ```mermaid
 flowchart LR
     A[Natural-language request] --> B[Task contract and hypotheses]
-    B --> C[GitHub and web discovery]
-    C --> D[Repository reranking]
-    D --> E[Bounded evidence retrieval]
-    E --> F[L1 and L2 validation]
-    F --> G{Deep Code enabled?}
-    G -- No --> H[Solution report and evidence matrix]
-    G -- Yes --> I[Adaptive repo map and code explanation]
-    I --> H
+    B --> C{Collaborative mode?}
+    C -- Yes --> D[Review goal and criteria]
+    D --> E{Confirm, edit, or skip}
+    E -- Edit --> B
+    E -- Continue --> F[Compile search plan]
+    C -- No --> F
+    F --> G[GitHub and SearXNG discovery]
+    G --> H[Repository reranking]
+    H --> I[Bounded evidence retrieval]
+    I --> J[L1 and L2 validation]
+    J --> K[Multi-component solutions]
+    K --> L{Deep Code enabled?}
+    L -- No --> M[Solution report and evidence matrix]
+    L -- Yes --> N[Adaptive repo map and code explanation]
+    N --> M
 ```
+
+Collaborative mode persists a pending checkpoint after requirement parsing. Confirm reuses the
+parsed contract without another requirement-model call; edit merges natural-language feedback and
+parses a revised contract. Conversation messages, checkpoints, and results survive an application
+or container restart through the shared SQLite database.
 
 The discovery stage keeps a broad product-category query and adds one-facet queries for important
 capabilities. Optional deployment wording such as Docker therefore cannot eliminate otherwise
@@ -250,3 +262,4 @@ main.py              FastAPI application and CLI
 See [TODO.en.md](TODO.en.md) for the roadmap, [evals/README.en.md](evals/README.en.md) for offline
 evaluation, and [docs/PERFORMANCE_HISTORY.en.md](docs/PERFORMANCE_HISTORY.en.md) for the public performance
 engineering history.
+The complete documentation index is [docs/README.en.md](docs/README.en.md).
