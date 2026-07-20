@@ -3,6 +3,4 @@
 __pycache__/
 *.py[cod]
 .cache/*
-!.cache/.gitkeep
 .DS_Store
-docs/RESUME.md
