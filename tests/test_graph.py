@@ -158,7 +158,7 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
                         url="https://github.com/example/photo-app",
                         description="Web result",
                         query="photo backup",
-                        providers=("brave",),
+                        source="searxng_web_search",
                     )
                 ]
             )
@@ -173,7 +173,7 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["candidates"][0]["full_name"], "example/photo-app")
         self.assertIn(
-            "brave_web_search", result["candidates"][0]["discovery"]["sources"]
+            "searxng_web_search", result["candidates"][0]["discovery"]["sources"]
         )
         github.get_repository.assert_awaited_once_with("example/photo-app")
 

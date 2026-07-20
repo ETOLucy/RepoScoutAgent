@@ -4,19 +4,19 @@
 
 RepoScoutAgent discovers and compares open-source solutions using verifiable repository evidence.
 It combines L1 documentation matching, L2 static implementation signals, optional Deep Code
-understanding, multi-source discovery, evidence matrices, and persistent research snapshots.
+understanding, GitHub plus SearXNG discovery, evidence matrices, and persistent research snapshots.
 Candidate repository code is never executed.
 
 Users describe a goal in natural language instead of writing GitHub search syntax. RepoScout turns
 the request into atomic, repository-verifiable criteria and complementary search hypotheses. It
-searches GitHub and optional web providers, reads repository evidence, validates exact quotes, and
+searches GitHub and optional SearXNG results, reads repository evidence, validates exact quotes, and
 returns complete solution proposals rather than an unqualified list of repository names.
 
 ## Key Capabilities
 
 - Natural-language task contracts with deterministic timeout fallback.
 - Multiple complementary GitHub queries instead of one all-keyword `AND` query.
-- GitHub, self-hosted SearXNG, and optional Brave Search discovery providers.
+- GitHub discovery with optional self-hosted SearXNG web recall.
 - README, docs, releases, key issues, recent commits, manifests, and bounded source retrieval.
 - Requirement-by-requirement `satisfied`, `violated`, and `unknown` evidence.
 - L2 `implemented`, `documented_only`, `uncertain`, and `contradicted` static signals.
@@ -107,10 +107,9 @@ docker compose up --build -d
 docker compose ps
 ```
 
-Compose starts RepoScout and an internal SearXNG service. No paid web-search key is required.
-SearXNG is the preferred provider; when `BRAVE_SEARCH_API_KEY` is configured, Brave runs in
-parallel as a commercial supplement. If neither web provider is configured, RepoScout continues
-with GitHub-only discovery.
+Compose starts RepoScout and an internal SearXNG service. No paid web-search key is required. If
+SearXNG is not configured for a direct process launch, RepoScout continues with GitHub-only
+discovery.
 
 For a separately managed SearXNG instance:
 
@@ -130,14 +129,13 @@ OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 OPENAI_ASSESSMENT_MODEL=gpt-5.4-mini
 OPENAI_ANALYSIS_TIMEOUT=60
 GITHUB_TOKEN=...
-BRAVE_SEARCH_API_KEY=
 ANALYSIS_MAX_CONCURRENCY=8
 ANALYSIS_CANDIDATE_LIMIT=8
 REPOSCOUT_RETRIEVAL_MODE=hybrid
 ```
 
-`BRAVE_SEARCH_API_KEY` is optional. `REPOSCOUT_RETRIEVAL_MODE` accepts `hybrid`, `semantic`, or
-`full`; `semantic` and `full` are primarily useful for evaluation and ablation.
+`REPOSCOUT_RETRIEVAL_MODE` accepts `hybrid`, `semantic`, or `full`; `semantic` and `full` are
+primarily useful for evaluation and ablation.
 
 ## API
 
@@ -193,13 +191,13 @@ Tests use mocked provider responses and do not require live OpenAI or GitHub acc
 - Deep Code currently uses Python AST plus cross-language static symbol patterns, bounded file
   selection, and a validated model explanation rather than a persistent full-repository index.
 - Conversation context is bounded in-process memory and is cleared on restart.
-- SearXNG/Brave discovery was not part of every historical performance observation; each benchmark
-  records the providers that were actually available.
+- SearXNG discovery was not part of every historical performance observation; each benchmark
+  records whether it was enabled.
 
 ## Project Layout
 
 ```text
-src/reposcout/       graph, retrieval, evidence, providers, and code understanding
+src/reposcout/       graph, retrieval, evidence, search integration, and code understanding
 tests/               unit, graph, API, and evaluation regression tests
 evals/               offline datasets and replay tools
 static/              web interface

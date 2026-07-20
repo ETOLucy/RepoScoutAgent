@@ -31,17 +31,6 @@
 - [ ] 当节点模块再次出现多职责增长时，按 requirement、discovery、assessment 边界拆分，
       不引入只做转发的空壳模块。
 
-## Explicitly Deferred
-
-| Capability | Decision | Reconsider when |
-|---|---|---|
-| Multi-Agent / subagents | 不需要 | 独立深度验证证明有收益且能维持一致性 |
-| Agentic retrieval loop | 暂缓 | 补充查询在标注集上有稳定收益 |
-| Cross-encoder / LLM reranker | 暂缓 | 当前仓库重排存在可复现瓶颈 |
-| Vector database | 不需要 | 需要跨请求持久化大规模仓库索引 |
-| GraphRAG / ColBERT | 暂缓 | 出现多跳关系或细粒度匹配瓶颈 |
-| Candidate build/runtime probe | 不进入项目 | L3/L4 执行不可信仓库代码，超出安全边界 |
-
 ## Definition Of Done
 
 新能力只有满足以下条件才进入主链路：

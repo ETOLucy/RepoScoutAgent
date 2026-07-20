@@ -34,16 +34,6 @@ This file lists unfinished work only. See [README.en.md](README.en.md) for curre
   ownership boundaries.
 - [ ] Add automated checks that every user-facing document has a working language counterpart.
 
-## Explicitly Deferred
-
-| Capability | Decision | Reconsider when |
-|---|---|---|
-| Multi-agent/subagents | Not required | Independent deep verification shows measurable gain |
-| Unbounded agentic retrieval | Deferred | Budgeted follow-up queries improve the labelled set |
-| Persistent vector database | Not required | Cross-request large-scale repository indexing is needed |
-| Full GraphRAG/ColBERT | Deferred | Multi-hop or fine-grained retrieval becomes a measured bottleneck |
-| Candidate build/runtime probe | Out of scope | A safe isolated L3/L4 execution product is designed |
-
 ## Definition of Done
 
 A feature enters the main path only when it:

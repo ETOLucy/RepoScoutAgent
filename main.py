@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -28,10 +27,7 @@ from src.reposcout.github_client import (
 from src.reposcout.nodes import inspect_repository_code, set_requirement_timeout
 from src.reposcout.research import ResearchStore
 from src.reposcout.web_search import (
-    BraveWebSearchClient,
-    CompositeWebSearchProvider,
     SearXNGSearchProvider,
-    WebSearchProvider,
     set_web_search_client,
 )
 
@@ -220,27 +216,16 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         max_attempts=config.github_max_attempts,
     )
     set_github_client(client)
-    providers: list[WebSearchProvider] = []
-    if config.searxng_url:
-        providers.append(
-            SearXNGSearchProvider(
-                config.searxng_url,
-                timeout_seconds=config.web_search_timeout,
-                max_queries=config.web_search_max_queries,
-                results_per_query=config.web_search_results,
-            )
-        )
-    brave_key = os.getenv("BRAVE_SEARCH_API_KEY")
-    if brave_key:
-        providers.append(
-            BraveWebSearchClient(
-            brave_key,
+    web_client = (
+        SearXNGSearchProvider(
+            config.searxng_url,
             timeout_seconds=config.web_search_timeout,
             max_queries=config.web_search_max_queries,
             results_per_query=config.web_search_results,
         )
-        )
-    web_client = CompositeWebSearchProvider(providers) if providers else None
+        if config.searxng_url
+        else None
+    )
     set_web_search_client(web_client)
     try:
         yield

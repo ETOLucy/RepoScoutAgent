@@ -59,10 +59,6 @@ degraded output as fully model-verified.
 - Added phase-specific recall, NDCG, L2, and citation regressions.
 - Added per-node timing and progressive provisional/analysis-count SSE events.
 
-The implementation did not add subagents. The bottleneck consisted of homogeneous independent
-network calls; stateless workers provide concurrency without duplicating task context and evidence
-coordination.
-
 ### Result
 
 | Version | Configuration | Observed end-to-end result |
@@ -92,8 +88,7 @@ software discovery, multi-source search, project comparison, verifiable citation
 reports, and local deployment.
 ```
 
-The environment had GitHub and model credentials but no Brave key, so this observation exercised
-GitHub plus the model, not full multi-source discovery.
+The observation enabled GitHub plus the model but not SearXNG, so it did not exercise web discovery.
 
 ### Before
 
