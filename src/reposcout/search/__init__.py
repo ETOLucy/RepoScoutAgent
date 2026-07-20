@@ -5,6 +5,7 @@ from .models import RepositoryAssessment, SearchIntent, SearchPlan, SearchStrate
 from .planner import (
     parse_search_intent_with_llm,
     parse_search_intent_with_rules,
+    preferred_response_language,
     remove_reference_project_names,
 )
 
@@ -16,6 +17,7 @@ __all__ = [
     "compile_search_plan",
     "parse_search_intent_with_llm",
     "parse_search_intent_with_rules",
+    "preferred_response_language",
     "remove_reference_project_names",
     "relax_github_query",
 ]

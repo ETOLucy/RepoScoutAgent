@@ -1,18 +1,22 @@
-# Offline Evaluation
+# 离线评测
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+[简体中文](README.md) | [English](README.en.md)
 
-`baseline_cases.json` contains 15 manually labelled natural-language search cases. Each case fixes the parsed intent, GitHub Search repositories, Tree paths and Contents text, model assessments, relevant repositories, and expected evidence requirements. Document-map keys are the recorded Tree paths and their values are the recorded Contents responses.
+`baseline_cases.json` 包含 15 条人工标注的自然语言搜索案例。每条案例固定任务契约、
+GitHub Search 仓库、Tree 路径、Contents 文本、模型判断、相关仓库及预期证据，因此可以
+在不联网的情况下重复比较检索和证据逻辑。
 
-Run the current full-document baseline without network access:
+运行全文文档基线：
 
 ```powershell
 .\.venv\Scripts\python.exe -m evals.run_baseline
 ```
 
-The command writes `baseline_report.json` with quality, latency, model-call, GitHub-call, and estimated-token metrics. Token counts are deterministic character-based estimates for relative comparisons. Cost remains `null` because this repository uses a configurable model/provider and does not yet have a versioned price table; a fabricated public-model price is less useful than an explicit unconfigured value.
+结果写入 `baseline_report.json`，包含质量、延迟、模型调用、GitHub 调用和估算 Token。
+Token 使用确定性字符估算，只适合相对比较。模型供应商和价格可以配置，因此未提供版本化
+价格时成本保持 `null`，不会套用虚构公开价格。
 
-When the configured provider price is known, calculate the estimate explicitly:
+已知价格时可显式传入：
 
 ```powershell
 .\.venv\Scripts\python.exe -m evals.run_baseline `
@@ -20,18 +24,26 @@ When the configured provider price is known, calculate the estimate explicitly:
   --output-price-per-million 2.00
 ```
 
-The prices above are syntax examples, not assumed prices for `gpt-5.5`.
+以上价格仅演示语法。固定集会保留已知失败案例，后续混合检索、重排和查询规划改动必须
+对同一批 fixtures 报告改善与回退。
 
-Known failure cases are intentionally retained. Future hybrid retrieval, reranking, or query-planning changes must run against the same fixtures and report improvements and regressions.
+`evals/search_quality.py` 分别报告重排前候选召回、检查截断后的 Recall@24、NDCG@24、
+从未召回的相关仓库，以及文档读取前被丢弃的相关仓库，避免最终推荐指标掩盖失败阶段。
 
-Search-stage evaluation is implemented in `evals/search_quality.py`. It reports candidate recall before reranking, Recall@24 after the inspection cutoff, NDCG@24, repositories never discovered, and relevant repositories dropped before document inspection. This separation prevents a final recommendation metric from hiding whether a failure came from query hypotheses or the 60-to-24 reduction. Relevance accepts graded labels rather than only a single gold repository, so several valid projects and degrees of fit can be represented.
-
-Task-contract evaluation should additionally label atomic success criteria and whether each generated hard requirement was grounded in the user request. Open-ended hypothesis quality should be judged by observable candidate gain and redundancy, with a calibrated evidence-bound LLM judge used only for qualities that deterministic labels cannot express.
-
-Run the hybrid BM25 + multi-query dense + RRF + MMR variant against the same fixtures:
+运行 BM25 + 多查询稠密检索 + RRF + MMR：
 
 ```powershell
 .\.venv\Scripts\python.exe -m evals.run_rag
 ```
 
-The command writes `rag_report.json`. The replay uses deterministic local embeddings so it remains offline; production uses the model configured by `OPENAI_EMBEDDING_MODEL`. Set `REPOSCOUT_RETRIEVAL_MODE=semantic` only for dense-only ablation.
+结果写入 `rag_report.json`。离线回放使用确定性本地 embedding；生产环境使用
+`OPENAI_EMBEDDING_MODEL`。`REPOSCOUT_RETRIEVAL_MODE=semantic` 只应用于纯稠密消融。
+
+L2 静态证据评测：
+
+```powershell
+.\.venv\Scripts\python.exe -m evals.run_l2
+```
+
+Deep Code 与 L2 目标不同，后续需要独立评测整体职责摘要、入口召回、模块解释准确率、
+源码引用准确率和不同仓库规模下的预算覆盖，不能复用 L2 的功能存在性指标。

@@ -1,4 +1,4 @@
-# RepoScoutAgent Roadmap
+# RepoScoutAgent 路线图
 
 [简体中文](TODO.md) | [English](TODO.en.md)
 
@@ -6,7 +6,7 @@
 [`docs/PERFORMANCE_HISTORY.md`](docs/PERFORMANCE_HISTORY.md)，性能验收计划见
 [`docs/PERFORMANCE_MILESTONE.md`](docs/PERFORMANCE_MILESTONE.md)。
 
-## Priority 1: Retrieval Evaluation
+## 优先级 1：检索评测
 
 - [ ] 扩展到 30–50 条人工标注的真实自然语言需求。
 - [ ] 在包含 25–60 个候选的真实案例上测 Candidate Recall@50 和仓库重排增益。
@@ -15,7 +15,7 @@
 - [ ] 增加否定语句、弃用说明和 roadmap 声明的回归案例。
 - [ ] 证据不足时评测一次有预算的补充查询，只有稳定提升后才进入主流程。
 
-## Priority 2: Performance Engineering v1
+## 优先级 2：性能工程 v1
 
 - [ ] 建立可复现的冷/热缓存 p50、p95 与 TTFC、TTFV 基线。
 - [ ] 增加结构化 trace ID、外部调用数、Token、成本和缓存命中率。
@@ -24,14 +24,14 @@
 - [ ] 评测自适应 6/8/12/24 分析预算的质量与延迟 Pareto。
 - [ ] 实验每批 2–3 个仓库的 LLM 结构化判断。
 
-## Priority 3: Maintainability
+## 优先级 3：可维护性
 
 - [ ] 将 GitHub 搜索、文档读取和 LLM 判断的运行配置集中为类型化 Settings。
 - [ ] 为节点输入输出增加更精确的 TypedDict，逐步减少 `dict[str, Any]`。
 - [ ] 当节点模块再次出现多职责增长时，按 requirement、discovery、assessment 边界拆分，
       不引入只做转发的空壳模块。
 
-## Definition Of Done
+## 完成标准
 
 新能力只有满足以下条件才进入主链路：
 

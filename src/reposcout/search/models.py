@@ -30,6 +30,7 @@ class ComponentRole(BaseModel):
 
 class SearchIntent(BaseModel):
     goal: str
+    response_language: Literal["zh-CN", "en"] = "zh-CN"
     requirements: list[RequirementItem] = Field(default_factory=list)
     excluded: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list, max_length=8)

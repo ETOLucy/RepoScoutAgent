@@ -12,6 +12,10 @@ the request into atomic, repository-verifiable criteria and complementary search
 searches GitHub and optional SearXNG results, reads repository evidence, validates exact quotes, and
 returns complete solution proposals rather than an unqualified list of repository names.
 
+User-facing narrative follows the request language. Chinese or mixed Chinese/English requests use
+Simplified Chinese, English-only requests use English, and ambiguous input defaults to Chinese.
+GitHub queries and evidence-retrieval terms may remain English to preserve recall quality.
+
 ## Key Capabilities
 
 - Natural-language task contracts that default to strict model parsing, with deterministic fallback
@@ -243,6 +247,6 @@ docs/                performance history and milestones
 main.py              FastAPI application and CLI
 ```
 
-See [TODO.en.md](TODO.en.md) for the roadmap, [evals/README.md](evals/README.md) for offline
+See [TODO.en.md](TODO.en.md) for the roadmap, [evals/README.en.md](evals/README.en.md) for offline
 evaluation, and [docs/PERFORMANCE_HISTORY.en.md](docs/PERFORMANCE_HISTORY.en.md) for the public performance
 engineering history.

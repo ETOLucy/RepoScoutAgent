@@ -51,6 +51,7 @@ from .search import (
     compile_search_plan,
     parse_search_intent_with_llm,
     parse_search_intent_with_rules,
+    preferred_response_language,
     relax_github_query,
 )
 from .search.models import CriterionMatch
@@ -183,6 +184,7 @@ async def understand_requirement(state: RepoScoutState) -> dict[str, Any]:
 
 def review_requirement(state: RepoScoutState) -> dict[str, Any]:
     intent = SearchIntent.model_validate(state["search_intent"])
+    chinese = intent.response_language == "zh-CN"
     criteria = [
         {
             "id": item.id,
@@ -194,18 +196,34 @@ def review_requirement(state: RepoScoutState) -> dict[str, Any]:
     question = (
         intent.clarification_questions[0]
         if intent.clarification_questions
-        else "这个理解是否符合你的目标？你可以确认，或直接输入需要修改的地方。"
+        else (
+            "这个理解是否符合你的目标？你可以确认，或直接输入需要修改的地方。"
+            if chinese
+            else (
+                "Does this match your goal? Confirm it or describe what should change."
+            )
+        )
     )
     required = [item["description"] for item in criteria if item["required"]]
     preferred = [item["description"] for item in criteria if not item["required"]]
-    lines = [
-        f"我理解你的目标是：{intent.goal}",
-        "",
-        "我会优先验证：",
-        *(f"- {item}" for item in required),
-    ]
+    lines = (
+        [
+            f"我理解你的目标是：{intent.goal}",
+            "",
+            "我会优先验证：",
+            *(f"- {item}" for item in required),
+        ]
+        if chinese
+        else [
+            f"I understand your goal as: {intent.goal}",
+            "",
+            "I will verify these required criteria first:",
+            *(f"- {item}" for item in required),
+        ]
+    )
     if preferred:
-        lines.extend(["", "同时作为偏好考虑：", *(f"- {item}" for item in preferred)])
+        heading = "同时作为偏好考虑：" if chinese else "I will also consider:"
+        lines.extend(["", heading, *(f"- {item}" for item in preferred)])
     lines.extend(["", question])
     return {
         "report": "\n".join(lines),
@@ -602,7 +620,17 @@ async def _match_document_batch(
                             os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
                         ),
                         input=[
-                            {"role": "system", "content": ASSESSMENT_PROMPT},
+                            {
+                                "role": "system",
+                                "content": (
+                                    ASSESSMENT_PROMPT
+                                    + (
+                                        " summary 必须使用简体中文。"
+                                        if intent.response_language == "zh-CN"
+                                        else " Write summary in English."
+                                    )
+                                ),
+                            },
                             {
                                 "role": "user",
                                 "content": (
@@ -942,7 +970,21 @@ async def inspect_repository_code(
                         os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
                     ),
                     input=[
-                        {"role": "system", "content": CODE_EXPLANATION_PROMPT},
+                        {
+                            "role": "system",
+                            "content": (
+                                CODE_EXPLANATION_PROMPT
+                                + (
+                                    " Write summary, module purposes, data flows, and limitations "
+                                    "in Simplified Chinese."
+                                    if preferred_response_language(requirement) == "zh-CN"
+                                    else (
+                                        " Write summary, module purposes, data flows, and "
+                                        "limitations in English."
+                                    )
+                                )
+                            ),
+                        },
                         {
                             "role": "user",
                             "content": (
@@ -1003,12 +1045,24 @@ async def generate_report(state: RepoScoutState) -> dict[str, Any]:
     if state.get("error"):
         return {"report": state["error"]}
     solutions = state.get("solutions", [])
+    intent = SearchIntent.model_validate(state.get("search_intent", {}))
     if not solutions:
-        report = "没有找到具备可分析 README/docs 的候选仓库。"
+        report = (
+            "没有找到具备可分析 README/docs 的候选仓库。"
+            if intent.response_language == "zh-CN"
+            else "No candidate repository with analyzable README/docs was found."
+        )
     else:
         report = (
-            f"使用关键词查询 `{state['query']}`，读取候选仓库 README/docs 后，"
-            f"形成 {len(solutions)} 套有证据支持的候选方案。"
+            (
+                f"使用关键词查询 `{state['query']}`，读取候选仓库 README/docs 后，"
+                f"形成 {len(solutions)} 套有证据支持的候选方案。"
+            )
+            if intent.response_language == "zh-CN"
+            else (
+                f"Queried `{state['query']}` and reviewed repository README/docs, "
+                f"producing {len(solutions)} evidence-backed solution(s)."
+            )
         )
     result: dict[str, Any] = {"report": report}
     with suppress(GitHubSearchError):

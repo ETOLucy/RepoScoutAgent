@@ -6,6 +6,7 @@ from src.reposcout.search import (
     compile_search_plan,
     parse_search_intent_with_llm,
     parse_search_intent_with_rules,
+    preferred_response_language,
     relax_github_query,
     remove_reference_project_names,
 )
@@ -20,7 +21,10 @@ class SearchPlanningTest(unittest.IsolatedAsyncioTestCase):
             keywords=["self-hosted photos", "face recognition"],
         )
 
-        async def parse(**_kwargs):
+        captured = {}
+
+        async def parse(**kwargs):
+            captured.update(kwargs)
             return SimpleNamespace(output_parsed=expected)
 
         client = SimpleNamespace(responses=SimpleNamespace(parse=parse))
@@ -28,6 +32,17 @@ class SearchPlanningTest(unittest.IsolatedAsyncioTestCase):
         result = await parse_search_intent_with_llm("找自托管照片项目", client, "test")
 
         self.assertEqual(result, expected)
+        self.assertEqual(result.response_language, "zh-CN")
+        system_prompt = captured["input"][0]["content"]
+        self.assertIn("Simplified Chinese", system_prompt)
+        self.assertIn("retrieval_terms", system_prompt)
+
+    def test_response_language_prefers_chinese_for_mixed_or_ambiguous_input(self):
+        self.assertEqual(
+            preferred_response_language("想找 Agent framework 项目"), "zh-CN"
+        )
+        self.assertEqual(preferred_response_language("123 Docker"), "en")
+        self.assertEqual(preferred_response_language("123"), "zh-CN")
 
     def test_rule_fallback_keeps_explicit_english_terms(self):
         intent = parse_search_intent_with_rules("找一个 Python LangGraph RAG 项目")

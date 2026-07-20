@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Literal
 
 from openai import AsyncOpenAI
 
@@ -9,6 +9,10 @@ from .models import RequirementItem, SearchIntent
 
 SEARCH_INTENT_PROMPT = (
     "Convert the user's natural-language GitHub project request into a task contract. "
+    "The caller supplies a mandatory UI response language. Write all user-facing narrative fields "
+    "(goal, requirement descriptions, excluded items, strategy labels, rationales, hypotheses, "
+    "expected signals, component purposes, and clarification questions) in that language. "
+    "Do not translate repository names, protocols, API names, or technical identifiers. "
     "Do not classify it into a fixed intent taxonomy. Infer what success means for this request. "
     "requirements are atomic, repository-verifiable success criteria. Never add a hard requirement "
     "the user did not express; set required=false for inferred preferences. evidence_sources names "
@@ -32,13 +36,35 @@ SEARCH_INTENT_PROMPT = (
 )
 
 
+def preferred_response_language(raw: str) -> Literal["zh-CN", "en"]:
+    """Use Chinese for Chinese/mixed input and as the ambiguous-input default."""
+    if re.search(r"[\u3400-\u4dbf\u4e00-\u9fff]", raw):
+        return "zh-CN"
+    latin_words = re.findall(r"[A-Za-z]{2,}", raw)
+    return "en" if latin_words else "zh-CN"
+
+
 async def parse_search_intent_with_llm(
     raw: str, client: AsyncOpenAI, model: str
 ) -> SearchIntent:
+    response_language = preferred_response_language(raw)
+    language_instruction = (
+        "Required UI response language: Simplified Chinese (zh-CN). "
+        "All narrative fields must be Chinese, even though retrieval_terms, keywords, "
+        "search strategy terms, and component search_terms must remain English."
+        if response_language == "zh-CN"
+        else (
+            "Required UI response language: English. All narrative fields must be English. "
+            "Retrieval and GitHub search terms must also remain English."
+        )
+    )
     response: Any = await client.responses.parse(
         model=model,
         input=[
-            {"role": "system", "content": SEARCH_INTENT_PROMPT},
+            {
+                "role": "system",
+                "content": f"{SEARCH_INTENT_PROMPT}\n\n{language_instruction}",
+            },
             {"role": "user", "content": raw},
         ],
         text_format=SearchIntent,
@@ -46,6 +72,7 @@ async def parse_search_intent_with_llm(
     parsed = response.output_parsed
     if not isinstance(parsed, SearchIntent):
         raise ValueError("LLM did not return SearchIntent")
+    parsed.response_language = response_language
     return remove_reference_project_names(parsed, raw)
 
 
@@ -137,6 +164,7 @@ def parse_search_intent_with_rules(raw: str) -> SearchIntent:
     ][:8]
     intent = SearchIntent(
         goal=raw.strip(),
+        response_language=preferred_response_language(raw),
         requirements=requirements,
         keywords=keywords,
     )

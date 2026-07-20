@@ -160,6 +160,19 @@ class GraphTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("query", result)
 
     @patch.dict(environ, {"OPENAI_API_KEY": ""})
+    async def test_chinese_interactive_review_uses_chinese_language_contract(self):
+        result = await build_graph().ainvoke(
+            {
+                "raw_requirement": "想找适合 Agent 开发实习的项目",
+                "allow_requirement_fallback": True,
+                "interactive": True,
+            }
+        )
+
+        self.assertEqual(result["search_intent"]["response_language"], "zh-CN")
+        self.assertIn("我理解你的目标", result["report"])
+
+    @patch.dict(environ, {"OPENAI_API_KEY": ""})
     async def test_reviewed_search_reuses_contract_and_continues(self):
         intent = SearchIntent(
             goal="find agent projects",
