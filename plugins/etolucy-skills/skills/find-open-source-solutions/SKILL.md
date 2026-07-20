@@ -40,7 +40,9 @@ Do not expose internal candidate brainstorming as recommendations.
 ### 3. Use Context7 as the primary understanding layer
 
 Use the Context7 MCP dependency before drawing conclusions about each finalist's architecture,
-capabilities, setup, APIs, or integration points. Follow [references/context7.md](references/context7.md).
+capabilities, setup, APIs, or integration points. For Chinese or mixed Chinese-English requests,
+follow [references/context7.zh-CN.md](references/context7.zh-CN.md). For English-only requests,
+follow [references/context7.md](references/context7.md). Read only the matching language version.
 
 Resolve each finalist to a Context7 library identifier, then query narrowly for the user's criteria.
 Prefer several focused questions over one broad request. Retrieve both official documentation and

@@ -1,0 +1,28 @@
+{
+  "name": "etolucy-skills",
+  "version": "0.1.0",
+  "description": "A personal collection of reusable Codex skills.",
+  "author": {
+    "name": "ETOLucy",
+    "url": "https://github.com/ETOLucy"
+  },
+  "homepage": "https://github.com/ETOLucy/find-open-source-solutions",
+  "repository": "https://github.com/ETOLucy/find-open-source-solutions",
+  "license": "MIT",
+  "keywords": ["codex", "skills", "github", "open-source", "context7"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Etolucy Skills",
+    "shortDescription": "Personal Codex skills for practical research workflows.",
+    "longDescription": "A growing personal collection of Codex skills, including Context7-backed discovery and comparison of open-source GitHub solutions.",
+    "developerName": "ETOLucy",
+    "category": "Productivity",
+    "capabilities": ["Research", "GitHub", "Context7"],
+    "defaultPrompt": [
+      "Recommend an open-source GitHub solution for my goal.",
+      "Compare open-source alternatives for this project.",
+      "Compose several repositories into one practical solution."
+    ]
+  }
+}
