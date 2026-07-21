@@ -1,28 +1,29 @@
 {
   "name": "etolucy-skills",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A personal collection of reusable Codex skills.",
   "author": {
     "name": "ETOLucy",
     "url": "https://github.com/ETOLucy"
   },
-  "homepage": "https://github.com/ETOLucy/find-open-source-solutions",
-  "repository": "https://github.com/ETOLucy/find-open-source-solutions",
+  "homepage": "https://github.com/ETOLucy/etolucy-skills",
+  "repository": "https://github.com/ETOLucy/etolucy-skills",
   "license": "MIT",
-  "keywords": ["codex", "skills", "github", "open-source", "context7"],
+  "keywords": ["codex", "skills", "github", "open-source", "context7", "teaching", "mentoring"],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Etolucy Skills",
-    "shortDescription": "Personal Codex skills for practical research workflows.",
-    "longDescription": "A growing personal collection of Codex skills, including Context7-backed discovery and comparison of open-source GitHub solutions.",
+    "shortDescription": "Personal Codex skills for research and guided development.",
+    "longDescription": "A growing personal collection of Codex skills for Context7-backed open-source research and learning software development by building real projects.",
     "developerName": "ETOLucy",
     "category": "Productivity",
-    "capabilities": ["Research", "GitHub", "Context7"],
+    "capabilities": ["Research", "GitHub", "Context7", "Teaching", "Software Development"],
     "defaultPrompt": [
       "Recommend an open-source GitHub solution for my goal.",
       "Compare open-source alternatives for this project.",
-      "Compose several repositories into one practical solution."
+      "Compose several repositories into one practical solution.",
+      "Help me build this project while teaching me how and why it works."
     ]
   }
 }

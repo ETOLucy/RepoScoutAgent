@@ -1,0 +1,7 @@
+interface:
+  display_name: "Learn by Building"
+  short_description: "Build projects through guided, hands-on teaching"
+  default_prompt: "Use $learn-by-building to help me build this project while teaching me the reasoning and skills behind each step."
+
+policy:
+  allow_implicit_invocation: true
