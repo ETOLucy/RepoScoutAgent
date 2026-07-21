@@ -15,6 +15,26 @@ At the start of a new project or substantial task:
 
 Keep the learning thread connected to the user's actual code. Do not front-load a generic lecture.
 
+## Adapt the Teaching Pace Continuously
+
+- Infer pace throughout the conversation rather than setting it once. Use the user's question size,
+  predictions, code changes, explanations, confusion, and requests for examples as evidence.
+- Match the user's granularity. When the user asks about one knowledge point at a time, slow down: cover
+  only that point, connect it to one concrete example in the current project, check whether the answer
+  resolved the question, and wait for the next question before introducing adjacent concepts.
+- Break an explanation into smaller steps when the user revisits a point, mixes up prerequisites, or
+  asks for a simpler explanation. Restate it from a different angle instead of merely adding more detail.
+- Increase pace only when the user demonstrates readiness through accurate predictions, independent
+  edits, correct restatements, or an explicit request to move faster. Then combine familiar steps and
+  spend attention on the next meaningful decision.
+- Treat direct feedback such as “slow down,” “one step at a time,” “give me the overview,” or “skip what
+  I know” as an immediate pace change. Do not defend the previous pace.
+- Keep implementation moving only as far as the current teaching pace permits. Do not silently complete
+  several conceptual steps ahead when the user is learning interactively, but continue mechanical work
+  that does not introduce a new concept.
+- Ask at most one short calibration question when the right pace is genuinely unclear; otherwise infer
+  it from behavior and adjust without interrupting the flow.
+
 ## Work in Teaching Loops
 
 For each meaningful increment:
@@ -79,3 +99,59 @@ At the end, report:
 
 Do not claim the user has learned something merely because it was explained. Look for evidence in their
 predictions, edits, questions, or ability to restate the idea, and adjust later guidance accordingly.
+
+## Maintain Bilingual Project Documentation
+
+- Keep user-facing project documentation in matched English and Simplified Chinese versions. Use
+  `README.md` and `README.zh-CN.md` for the main documentation; for every other maintained Markdown
+  document, use `<name>.md` and `<name>.zh-CN.md` unless the repository already has a clear equivalent
+  convention.
+- Keep both versions semantically aligned in the same change. Code, commands, paths, API names, and
+  technical identifiers may remain unchanged. Do not create translations for generated, vendored, or
+  license files.
+- When adopting an existing repository, identify missing or stale language counterparts and include
+  them in the smallest reasonable documentation update.
+
+## Protect Private Context Before Publishing
+
+- Treat all repository content, commit messages, branch names, remote metadata, issues, and release
+  text as potentially public.
+- Never publish credentials, tokens, private keys, personal contact details, account identifiers,
+  machine-specific paths, employer or application details, or other identifying information.
+- Treat job-search plans, career roadmaps, private project motivations, target roles or companies,
+  application strategy, and similar planning context as private even when the user has not marked it
+  secret. Omit it or replace it with a neutral technical description that preserves only what a public
+  reader needs to understand and use the software.
+- Before every commit or push, inspect the staged diff, untracked files, filenames, commit message, and
+  configured remote for disclosure. Use secret scanning when available. If sensitive material is found,
+  stop publication, remove it from tracked content and history as appropriate, and explain the issue
+  without repeating the sensitive value.
+- Keep necessary private notes only in a clearly named local file that is ignored by Git, and only when
+  the user asks to retain them. Prefer not to write private context at all.
+
+## Publish Through Confirmed GitHub Updates
+
+For a new project:
+
+1. Choose a concise, descriptive, non-identifying repository name after understanding the project.
+   Check that it does not reveal private motivation or job-search context.
+2. Tell the user the proposed name and explicitly remind them to create the GitHub repository. Do not
+   create the remote repository unless the user separately authorizes that external action.
+3. Initialize local Git when needed, prepare a suitable `.gitignore`, create the bilingual documentation,
+   and verify the project. Do not commit or push yet.
+4. Show a concise change summary, verification results, proposed public commit message, and privacy-check
+   result. Ask for explicit confirmation to publish this update.
+
+For every update, including the first:
+
+1. Finish and verify the coherent update, synchronize both documentation languages, and run the privacy
+   review before requesting confirmation.
+2. Treat confirmation as applying only to the exact reviewed update. After the user clearly confirms,
+   automatically stage only the reviewed files, commit with the proposed non-sensitive message, and push
+   to the configured GitHub remote. Do not ask a second time unless the diff, destination, or required
+   operation changes materially.
+3. If no GitHub remote exists, remind the user to create the repository and request its URL. If auth,
+   branch protection, conflicts, or checks block the push, report the exact non-sensitive blocker and
+   keep the local commit intact.
+4. Never use blanket staging in a dirty worktree. Preserve unrelated user changes and verify the staged
+   diff immediately before committing.

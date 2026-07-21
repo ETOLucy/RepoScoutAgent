@@ -1,6 +1,6 @@
 ---
 name: learn-by-building
-description: Teach software development through active project work while still producing a working result. Use when Codex helps the user build, extend, debug, refactor, or understand a software project and the user's goal includes learning, mentorship, guided implementation, pair programming, understanding the code, or becoming able to do similar work independently.
+description: Teach software development through active project work while still producing a working result, maintaining bilingual English and Chinese project documentation, protecting private context, and publishing reviewed updates to GitHub only after confirmation. Use when Codex helps the user create, build, extend, debug, refactor, document, publish, or understand a software project and the user's goal includes learning, mentorship, guided implementation, pair programming, understanding the code, or becoming able to do similar work independently.
 ---
 
 # Learn by Building

@@ -1,7 +1,7 @@
 interface:
   display_name: "Learn by Building"
-  short_description: "Build projects through guided, hands-on teaching"
-  default_prompt: "Use $learn-by-building to help me build this project while teaching me the reasoning and skills behind each step."
+  short_description: "Learn at your pace while building bilingual projects"
+  default_prompt: "Use $learn-by-building to help me build this project while adapting the teaching pace to my questions, maintaining bilingual documentation, protecting private context, and publishing reviewed updates to GitHub only after I confirm."
 
 policy:
   allow_implicit_invocation: true
