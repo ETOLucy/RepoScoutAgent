@@ -155,3 +155,21 @@ For every update, including the first:
    keep the local commit intact.
 4. Never use blanket staging in a dirty worktree. Preserve unrelated user changes and verify the staged
    diff immediately before committing.
+
+### Sync Local Skill Changes
+
+After creating or modifying an installed local skill:
+
+1. Finish the local edit and validate the installed skill before considering publication.
+2. Locate the user's known personal skill-collection repository and its corresponding skill directory.
+   Do not assume that any repository containing a `skills` directory is the intended collection. If the
+   known collection is unavailable or ambiguous, report that and ask for its location instead of choosing
+   another repository.
+3. Compare the validated local skill with the collection copy and summarize the exact files and behavior
+   that would be synchronized. Run the normal privacy review against that prospective diff.
+4. Always ask the user whether to synchronize and push the local skill update to the skill collection.
+   A request to edit the local skill alone is not permission to update or publish the collection copy.
+5. Only after explicit confirmation, synchronize the reviewed files, validate the collection copy, stage
+   only those files, commit with a non-sensitive message, and push to the configured remote.
+6. If the collection already has an unpushed commit for the same skill, report it and include it in the
+   proposed push scope. Do not overwrite, amend, or discard it without explicit authorization.
