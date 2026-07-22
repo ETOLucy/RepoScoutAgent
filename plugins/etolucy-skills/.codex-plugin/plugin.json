@@ -1,7 +1,7 @@
 {
   "name": "etolucy-skills",
-  "version": "0.2.0",
-  "description": "A personal collection of reusable Codex skills.",
+  "version": "0.2.1",
+  "description": "Reusable Codex skills with GitHub and Context7-backed open-source research.",
   "author": {
     "name": "ETOLucy",
     "url": "https://github.com/ETOLucy"
@@ -15,7 +15,7 @@
   "interface": {
     "displayName": "Etolucy Skills",
     "shortDescription": "Personal Codex skills for research and guided development.",
-    "longDescription": "A growing personal collection of Codex skills for Context7-backed open-source research and learning software development by building real projects.",
+    "longDescription": "A growing personal collection of Codex skills for GitHub and Context7-backed open-source research and learning software development by building real projects.",
     "developerName": "ETOLucy",
     "category": "Productivity",
     "capabilities": ["Research", "GitHub", "Context7", "Teaching", "Software Development"],

@@ -4,8 +4,8 @@
 
 这是一个个人 Codex Skill 集。当前包含：
 
-- `find-open-source-solutions`：使用模型知识和实时发现寻找 GitHub 候选，并优先通过
-  Context7 检索仓库代码和官方文档，生成明确的单仓库或多仓库解决方案。
+- `find-open-source-solutions`：使用 GitHub MCP 实时发现并核验候选，再通过 Context7
+  语义检索仓库代码和官方文档，生成明确的单仓库或多仓库解决方案。
 - `learn-by-building`：在推进真实项目的同时，以教学和能力迁移为核心，通过小步实现、
   原理讲解、验证和练习，让用户逐步具备独立完成类似工作的能力。
 
@@ -19,7 +19,7 @@ codex.cmd plugin marketplace add ETOLucy/etolucy-skills
 
 在 macOS 或 Linux 上使用 `codex plugin marketplace add ETOLucy/etolucy-skills`。
 然后在 Codex 应用的 Marketplace 中安装 `etolucy-skills`，并开启一个新对话，让 Codex
-加载新的 Skill 和 Context7 MCP。
+加载新的 Skill、只读 GitHub MCP 和 Context7 MCP。GitHub MCP 会在安装时请求 GitHub 认证。
 
 ## 目录
 

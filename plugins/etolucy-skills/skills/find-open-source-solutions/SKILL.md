@@ -1,6 +1,6 @@
 ---
 name: find-open-source-solutions
-description: Discover, compare, and compose existing open-source GitHub repositories for a user's goal, using model knowledge and live discovery for candidates and Context7 semantic retrieval over repository code and official documentation for grounded understanding. Use when a user asks for GitHub repo recommendations, open-source alternatives, a multi-repository solution stack, project comparison, or help choosing an implementation to adopt.
+description: Discover, compare, and compose existing open-source GitHub repositories for a user's goal, using GitHub MCP for live discovery and verification plus Context7 semantic retrieval over repository code and official documentation. Use when a user asks for GitHub repo recommendations, open-source alternatives, a multi-repository solution stack, project comparison, or help choosing an implementation to adopt.
 ---
 
 # Find Open Source Solutions
@@ -29,11 +29,16 @@ update it and ask for confirmation again. Treat a clear confirmation as authoriz
 After confirmation:
 
 1. Use model knowledge to name strong established candidates and plausible multi-repository stacks.
-2. Use available GitHub or web-search tools to refresh repository existence, ownership, archival
-   state, recent activity, license, releases, and newly relevant alternatives.
+2. Prefer the read-only GitHub MCP dependency for live candidate discovery and verification. Use
+   `search_repositories` to discover candidates, then repository metadata, releases, and commits to
+   verify existence, ownership, archival state, recent activity, license, and project direction.
 3. Keep a small, diverse set. Prefer 3 to 6 serious candidates over a long search-results list.
 4. Search by product category and user outcome, not only by every constraint joined with AND.
 5. Include supporting repositories only when their role makes the overall solution better.
+
+GitHub repository and code search are query-driven lexical retrieval, not embedding-based semantic
+retrieval. Use several focused searches with synonyms and adjacent category terms. If GitHub MCP is
+unavailable, use another live GitHub or web-search tool without blocking the workflow.
 
 Do not expose internal candidate brainstorming as recommendations.
 
@@ -49,9 +54,9 @@ Prefer several focused questions over one broad request. Retrieve both official 
 code-oriented context when Context7 makes them available.
 
 Treat Context7 coverage as candidate-specific. If a repository is not indexed, retry with its exact
-GitHub owner/name and canonical project name. If it remains unavailable, use live repository files
-or official documentation through other available tools. Never claim Context7 verified an unindexed
-repository.
+GitHub owner/name and canonical project name. If it remains unavailable, use GitHub MCP
+`search_code` and `get_file_contents` to read the smallest relevant set of repository files, then
+consult official documentation when needed. Never claim Context7 verified an unindexed repository.
 
 ### 4. Make the decision
 
@@ -91,6 +96,7 @@ of the main answer unless the user asks for them.
 - Prefer a decisive answer over a neutral catalog.
 - Distinguish current retrieved facts from general judgment without repetitive disclaimers.
 - Do not require API keys when anonymous Context7 access works.
+- Use GitHub MCP only for read operations; do not modify repositories, issues, pull requests, or stars.
 - Do not build a local vector index when Context7 covers the repository.
 - Do not execute repository code unless the user explicitly expands the task to evaluation or setup.
 - Let the host product own authentication, user isolation, conversation memory, and presentation.

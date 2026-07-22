@@ -35,8 +35,8 @@ producer's S3 support and the consumer's S3 configuration separately before call
 When resolution fails:
 
 1. Retry once with the canonical name and exact GitHub URL.
-2. Use available GitHub repository or browser tools to read README, official docs, releases, and the
-   smallest relevant source slices.
+2. Prefer read-only GitHub MCP `search_code` and `get_file_contents` to read README, official docs,
+   releases, and the smallest relevant source slices; use other GitHub or browser tools if needed.
 3. State the conclusion normally, but do not label it as Context7-derived.
 
 When Context7 itself is unavailable, continue with live GitHub and official sources. Mention the
@@ -50,4 +50,5 @@ degradation only when it materially limits the recommendation.
 - Prefer current official documentation for setup and compatibility claims.
 - Use code context for architecture or implementation questions, not as a substitute for product
   judgment.
+- Treat GitHub repository and code search as query-driven lexical retrieval, not semantic retrieval.
 
