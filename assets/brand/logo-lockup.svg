@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 120" role="img" aria-labelledby="title desc">
+  <title id="title">Codex Workflow Skills</title>
+  <desc id="desc">Skill Loop logo with the Codex Workflow Skills wordmark.</desc>
+  <defs><mask id="core-cutout"><rect width="100" height="100" fill="white"/><circle cx="50" cy="50" r="7" fill="black"/></mask></defs>
+  <g transform="translate(10 10)">
+    <g fill="none" stroke="#17202A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M42 18H25C20.5 18 18 20.5 18 25V42"/><path d="M58 18H75C79.5 18 82 20.5 82 25V42"/>
+      <path d="M82 58V75C82 79.5 79.5 82 75 82H58"/><path d="M42 82H25C20.5 82 18 79.5 18 75V58"/>
+    </g>
+    <path fill="#18A889" mask="url(#core-cutout)" d="M50 30L70 50L50 70L30 50Z"/>
+  </g>
+  <text x="126" y="58" fill="#17202A" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="35" font-weight="700" letter-spacing="0">Codex Workflow</text>
+  <text x="128" y="86" fill="#66716C" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="3">SKILLS</text>
+</svg>

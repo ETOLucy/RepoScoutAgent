@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc">
+  <title id="title">Codex Workflow Skills logo</title>
+  <desc id="desc">Four open corners surround a diamond-shaped reusable skill core.</desc>
+  <defs><mask id="core-cutout"><rect width="100" height="100" fill="white"/><circle cx="50" cy="50" r="7" fill="black"/></mask></defs>
+  <g fill="none" stroke="#17202A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M42 18H25C20.5 18 18 20.5 18 25V42"/><path d="M58 18H75C79.5 18 82 20.5 82 25V42"/>
+    <path d="M82 58V75C82 79.5 79.5 82 75 82H58"/><path d="M42 82H25C20.5 82 18 79.5 18 75V58"/>
+  </g>
+  <path fill="#18A889" mask="url(#core-cutout)" d="M50 30L70 50L50 70L30 50Z"/>
+</svg>

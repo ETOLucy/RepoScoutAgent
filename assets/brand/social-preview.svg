@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">Codex Workflow Skills social preview</title>
+  <desc id="desc">The Skill Loop logo and project name on a dark background.</desc>
+  <defs><mask id="core-cutout"><rect width="100" height="100" fill="white"/><circle cx="50" cy="50" r="7" fill="black"/></mask></defs>
+  <rect width="1280" height="640" fill="#101714"/>
+  <path d="M0 532H1280" stroke="#27332E" stroke-width="2"/>
+  <g transform="translate(110 160) scale(3.2)">
+    <g fill="none" stroke="#F4F8F6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M42 18H25C20.5 18 18 20.5 18 25V42"/><path d="M58 18H75C79.5 18 82 20.5 82 25V42"/>
+      <path d="M82 58V75C82 79.5 79.5 82 75 82H58"/><path d="M42 82H25C20.5 82 18 79.5 18 75V58"/>
+    </g>
+    <path fill="#25C7A5" mask="url(#core-cutout)" d="M50 30L70 50L50 70L30 50Z"/>
+  </g>
+  <text x="500" y="260" fill="#F4F8F6" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="66" font-weight="700" letter-spacing="0">Codex Workflow</text>
+  <text x="503" y="332" fill="#25C7A5" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="700" letter-spacing="8">SKILLS</text>
+  <text x="503" y="404" fill="#AAB5B0" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="24" letter-spacing="0">Reliable workflows for research, design, and development.</text>
+  <text x="110" y="577" fill="#77837E" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="17" font-weight="600" letter-spacing="3">OPEN WORKFLOWS · BUILT FOR CODEX</text>
+</svg>

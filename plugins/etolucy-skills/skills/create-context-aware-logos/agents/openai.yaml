@@ -1,0 +1,4 @@
+interface:
+  display_name: "Context-Aware Logo Designer"
+  short_description: "Design logos and asset sets for their real usage context"
+  default_prompt: "Use $create-context-aware-logos to design a logo and production-ready assets for my target platform."
