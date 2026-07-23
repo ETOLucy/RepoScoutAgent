@@ -1,4 +1,4 @@
-# ETOLucy Skills
+# Codex Workflow Skills
 
 English | [简体中文](README.md)
 
