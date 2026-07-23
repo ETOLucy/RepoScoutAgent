@@ -1,7 +1,7 @@
 {
   "name": "etolucy-skills",
-  "version": "0.5.0",
-  "description": "Workflow-focused Codex skills for research, open-source selection, guided development, and context-aware logo design.",
+  "version": "0.6.0",
+  "description": "Workflow-focused Codex skills for research, repository management, open-source selection, guided development, and context-aware logo design.",
   "author": {
     "name": "ETOLucy",
     "url": "https://github.com/ETOLucy"
@@ -9,16 +9,16 @@
   "homepage": "https://github.com/ETOLucy/codex-workflow-skills",
   "repository": "https://github.com/ETOLucy/codex-workflow-skills",
   "license": "MIT",
-  "keywords": ["codex", "skills", "due-diligence", "research", "github", "open-source", "context7", "teaching", "software-development", "logo-design", "branding"],
+  "keywords": ["codex", "skills", "due-diligence", "research", "github", "repository-management", "open-source", "context7", "teaching", "software-development", "logo-design", "branding"],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Codex Workflow Skills",
     "shortDescription": "Reliable workflows for research, design, and development.",
-    "longDescription": "Workflow-focused Codex skills for evidence-backed due diligence, informed open-source selection, context-aware logo design, and hands-on software development that produces working results while building understanding.",
+    "longDescription": "Workflow-focused Codex skills for evidence-backed due diligence, GitHub repository management, informed open-source selection, context-aware logo design, and hands-on software development that produces working results while building understanding.",
     "developerName": "ETOLucy",
     "category": "Productivity",
-    "capabilities": ["Due Diligence", "Research", "Logo Design", "GitHub", "Context7", "Teaching", "Software Development"],
+    "capabilities": ["Due Diligence", "Research", "Repository Management", "Logo Design", "GitHub", "Context7", "Teaching", "Software Development"],
     "brandColor": "#18A889",
     "composerIcon": "./assets/logo-mark.svg",
     "logo": "./assets/logo-mark.svg",

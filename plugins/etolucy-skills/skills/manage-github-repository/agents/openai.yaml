@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manage GitHub Repository"
+  short_description: "Automate GitHub repository identity and metadata"
+  default_prompt: "Use $manage-github-repository to rename and polish this local and remote GitHub repository."
