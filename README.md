@@ -63,13 +63,13 @@
 将此仓库添加为 Codex Marketplace：
 
 ```powershell
-codex.cmd plugin marketplace add ETOLucy/Lucy_skills
+codex.cmd plugin marketplace add ETOLucy/codex-workflow-skills
 ```
 
 在 macOS 或 Linux 上运行：
 
 ```bash
-codex plugin marketplace add ETOLucy/Lucy_skills
+codex plugin marketplace add ETOLucy/codex-workflow-skills
 ```
 
 然后在 Codex 应用的 Marketplace 中安装 `etolucy-skills`，并开启一个新对话以加载 Skills

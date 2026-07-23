@@ -1,13 +1,13 @@
 {
   "name": "etolucy-skills",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Workflow-focused Codex skills for evidence-backed research, open-source selection, and guided software development.",
   "author": {
     "name": "ETOLucy",
     "url": "https://github.com/ETOLucy"
   },
-  "homepage": "https://github.com/ETOLucy/Lucy_skills",
-  "repository": "https://github.com/ETOLucy/Lucy_skills",
+  "homepage": "https://github.com/ETOLucy/codex-workflow-skills",
+  "repository": "https://github.com/ETOLucy/codex-workflow-skills",
   "license": "MIT",
   "keywords": ["codex", "skills", "due-diligence", "research", "github", "open-source", "context7", "teaching", "software-development"],
   "skills": "./skills/",

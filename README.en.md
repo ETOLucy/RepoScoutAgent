@@ -67,13 +67,13 @@ Example:
 Add this repository as a Codex Marketplace:
 
 ```powershell
-codex.cmd plugin marketplace add ETOLucy/Lucy_skills
+codex.cmd plugin marketplace add ETOLucy/codex-workflow-skills
 ```
 
 On macOS or Linux:
 
 ```bash
-codex plugin marketplace add ETOLucy/Lucy_skills
+codex plugin marketplace add ETOLucy/codex-workflow-skills
 ```
 
 Install `etolucy-skills` from Marketplace in the Codex app, then start a new conversation to load
