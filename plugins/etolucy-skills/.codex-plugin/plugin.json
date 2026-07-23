@@ -1,21 +1,21 @@
 {
   "name": "etolucy-skills",
-  "version": "0.3.0",
-  "description": "Reusable Codex skills for due diligence, open-source research, and guided development.",
+  "version": "0.4.0",
+  "description": "Workflow-focused Codex skills for evidence-backed research, open-source selection, and guided software development.",
   "author": {
     "name": "ETOLucy",
     "url": "https://github.com/ETOLucy"
   },
-  "homepage": "https://github.com/ETOLucy/etolucy-skills",
-  "repository": "https://github.com/ETOLucy/etolucy-skills",
+  "homepage": "https://github.com/ETOLucy/Lucy_skills",
+  "repository": "https://github.com/ETOLucy/Lucy_skills",
   "license": "MIT",
-  "keywords": ["codex", "skills", "github", "open-source", "context7", "teaching", "mentoring"],
+  "keywords": ["codex", "skills", "due-diligence", "research", "github", "open-source", "context7", "teaching", "software-development"],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Etolucy Skills",
-    "shortDescription": "Codex skills for research and guided development.",
-    "longDescription": "A collection of Codex skills for evidence-backed due diligence, GitHub and Context7-backed open-source research, and learning software development by building real projects.",
+    "shortDescription": "Reliable workflows for research, selection, and development.",
+    "longDescription": "Workflow-focused Codex skills for evidence-backed due diligence, informed open-source selection, and hands-on software development that produces working results while building understanding.",
     "developerName": "ETOLucy",
     "category": "Productivity",
     "capabilities": ["Due Diligence", "Research", "GitHub", "Context7", "Teaching", "Software Development"],
