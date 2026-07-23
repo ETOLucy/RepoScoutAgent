@@ -9,6 +9,8 @@ A personal collection of Codex skills. It currently includes:
   decisive single-repository or composed solution.
 - `learn-by-building`: advances real projects through small, runnable steps while prioritizing mental
   models, implementation reasoning, verification, and transferable hands-on practice.
+- `general-web-research`: conducts reproducible, decision-oriented due diligence with dated sources,
+  evidence grading, explicit uncertainty, and actionable conclusions.
 
 ## Install
 
@@ -32,7 +34,8 @@ plugins/etolucy-skills/
 ├── .mcp.json
 └── skills/
     ├── find-open-source-solutions/
-    └── learn-by-building/
+    ├── learn-by-building/
+    └── general-web-research/
 ```
 
 Add future skills under `plugins/etolucy-skills/skills/` and update the plugin version.

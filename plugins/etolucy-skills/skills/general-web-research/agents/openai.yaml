@@ -1,0 +1,4 @@
+interface:
+  display_name: "General Due Diligence"
+  short_description: "Research, verify, and produce decision-ready due diligence"
+  default_prompt: "Use $general-web-research to conduct due diligence with dated sources, evidence grading, and actionable conclusions."

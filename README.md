@@ -8,6 +8,8 @@
   语义检索仓库代码和官方文档，生成明确的单仓库或多仓库解决方案。
 - `learn-by-building`：在推进真实项目的同时，以教学和能力迁移为核心，通过小步实现、
   原理讲解、验证和练习，让用户逐步具备独立完成类似工作的能力。
+- `general-web-research`：开展可复现、面向决策的通用尽调，提供带日期的来源、证据分级、
+  明确的不确定性和可执行结论。
 
 ## 安装
 
@@ -30,7 +32,8 @@ plugins/etolucy-skills/
 ├── .mcp.json
 └── skills/
     ├── find-open-source-solutions/
-    └── learn-by-building/
+    ├── learn-by-building/
+    └── general-web-research/
 ```
 
 以后新增 Skill 时，将其放入 `plugins/etolucy-skills/skills/`，再更新插件版本。

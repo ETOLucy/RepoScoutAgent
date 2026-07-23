@@ -1,7 +1,7 @@
 {
   "name": "etolucy-skills",
-  "version": "0.2.1",
-  "description": "Reusable Codex skills with GitHub and Context7-backed open-source research.",
+  "version": "0.3.0",
+  "description": "Reusable Codex skills for due diligence, open-source research, and guided development.",
   "author": {
     "name": "ETOLucy",
     "url": "https://github.com/ETOLucy"
@@ -14,15 +14,16 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Etolucy Skills",
-    "shortDescription": "Personal Codex skills for research and guided development.",
-    "longDescription": "A growing personal collection of Codex skills for GitHub and Context7-backed open-source research and learning software development by building real projects.",
+    "shortDescription": "Codex skills for research and guided development.",
+    "longDescription": "A collection of Codex skills for evidence-backed due diligence, GitHub and Context7-backed open-source research, and learning software development by building real projects.",
     "developerName": "ETOLucy",
     "category": "Productivity",
-    "capabilities": ["Research", "GitHub", "Context7", "Teaching", "Software Development"],
+    "capabilities": ["Due Diligence", "Research", "GitHub", "Context7", "Teaching", "Software Development"],
     "defaultPrompt": [
       "Recommend an open-source GitHub solution for my goal.",
       "Compare open-source alternatives for this project.",
       "Compose several repositories into one practical solution.",
+      "Conduct evidence-backed due diligence on a current topic.",
       "Help me build this project while teaching me how and why it works."
     ]
   }
